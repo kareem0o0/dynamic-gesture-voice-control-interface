@@ -10,7 +10,7 @@ interpreter.allocate_tensors()
 # Get input and output details
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
-
+ 
 # Load labels
 with open("gesture_classifier/labels.txt", "r") as f:
     class_names = f.readlines()
