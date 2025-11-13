@@ -5,7 +5,7 @@ Unified Robot Controller with Three Modes:
 3. Gesture Control (toggle with spacebar)
 
 Author: Unified Control System
-Version: 1.0
+Version: 1.1 - Scalable Gesture Commands
 """
 
 import serial
@@ -41,7 +41,7 @@ GESTURE_CONFIDENCE_THRESHOLD = 0.7
 GESTURE_COOLDOWN = 1.0  # Seconds between gesture commands
 
 # Action Timing Configuration
-COMMAND_DURATION = 3.0  # Duration for voice commands (seconds)
+COMMAND_DURATION = 2.0  # Duration for voice commands (seconds)
 COOLDOWN_TIME = 1.0     # Cooldown after stop command (seconds)
 
 # ============================================================
@@ -82,16 +82,28 @@ VOICE_COMMANDS = {
     "clockwise": ('C', STOP_ARM3),
     "anti": ('V', STOP_ARM3),
     "stop": (STOP_ALL, None),
-    "clap": ('Q', None),
 }
 
 # TODO: Update this dictionary when new gesture commands are added
-# Format: "gesture_name": command_character
-# Note: "start" gesture uses forward/backward toggle logic
-# Note: "stop" gesture stops movement and toggles direction
+# Format: "gesture_class_name": command_character
+# The gesture_class_name MUST match exactly what's in your labels.txt file
+# For example, if labels.txt has "0 start" and "1 stop", use "start" and "stop" as keys
+
 GESTURE_COMMANDS = {
-    "start": None,  # Special handling with direction toggle
-    "stop": STOP_DRIVE,
+    # Current model gestures (as per your labels.txt):
+    "start": 'F',        # Start gesture → Move forward
+    "stop": STOP_ALL,    # Stop gesture → Stop all motors
+    
+    # FUTURE EXPANSION: When you retrain with more gestures, add them here:
+    # "forward": 'F',
+    # "backward": 'B',
+    # "left": 'L',
+    # "right": 'R',
+    # "up": 'Z',
+    # "down": 'A',
+    # "thumbs_up": 'Q',    # Example: toggle LED
+    # "peace": 'C',        # Example: rotate arm
+    # "fist": STOP_ALL,    # Example: emergency stop
 }
 
 
@@ -154,10 +166,9 @@ class UnifiedRobotController:
         self.camera = None
         self.gesture_interpreter = None
         self.gesture_labels = []
-        self.gesture_direction_forward = True  # True = forward, False = backward
         self.last_gesture = None
         self.last_gesture_time = 0
-        self.gesture_driving = False
+        self.gesture_current_cmd = None  # Track current gesture command being executed
         
         # Initialize models
         self._init_voice_model()
@@ -184,9 +195,28 @@ class UnifiedRobotController:
             self.voice_buffer = np.zeros(samples, dtype=np.float32)
             
             with open(VOICE_LABELS) as f:
-                self.voice_labels = [line.strip().split()[-1] for line in f]
+                # Read labels and extract class names
+                lines = f.readlines()
+                self.voice_labels = []
+                for line in lines:
+                    # Handle both "0 classname" and "classname" formats
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        # Format: "0 forward" -> extract "forward"
+                        self.voice_labels.append(parts[-1])
+                    elif len(parts) == 1:
+                        # Format: "forward" -> use as-is
+                        self.voice_labels.append(parts[0])
             
             print("✓ Voice model loaded successfully")
+            print(f"  Detected voice classes: {self.voice_labels}")
+            print(f"  Mapped commands:")
+            for voice_cmd in self.voice_labels:
+                if voice_cmd in VOICE_COMMANDS:
+                    start_cmd, stop_cmd = VOICE_COMMANDS[voice_cmd]
+                    print(f"    - '{voice_cmd}' → Start: '{start_cmd}', Stop: '{stop_cmd}'")
+                else:
+                    print(f"    - '{voice_cmd}' → ⚠ NOT MAPPED (will be ignored)")
         except Exception as e:
             print(f"⚠ Voice model error: {e}")
             self.voice_interpreter = None
@@ -203,9 +233,24 @@ class UnifiedRobotController:
             self.gesture_interpreter.allocate_tensors()
             
             with open(GESTURE_LABELS, "r") as f:
-                self.gesture_labels = [line.strip().split(" ", 1)[1] for line in f.readlines()]
+                # Read labels and extract class names
+                lines = f.readlines()
+                self.gesture_labels = []
+                for line in lines:
+                    parts = line.strip().split(" ", 1)
+                    if len(parts) == 2:
+                        self.gesture_labels.append(parts[1])  # Get the class name
+                    else:
+                        self.gesture_labels.append(parts[0])  # Fallback to whole line
             
             print("✓ Gesture model loaded successfully")
+            print(f"  Detected gesture classes: {self.gesture_labels}")
+            print(f"  Mapped commands:")
+            for gesture in self.gesture_labels:
+                if gesture in GESTURE_COMMANDS:
+                    print(f"    - '{gesture}' → Command '{GESTURE_COMMANDS[gesture]}'")
+                else:
+                    print(f"    - '{gesture}' → ⚠ NOT MAPPED (will be ignored)")
         except Exception as e:
             print(f"⚠ Gesture model error: {e}")
             self.gesture_interpreter = None
@@ -246,7 +291,9 @@ class UnifiedRobotController:
         print("  │   ├─ 0/2: Arm3 clockwise/counter")
         print("  │   └─ Q: Toggle LED")
         print("  ├─ VOICE: Press 'a' to toggle")
+        print("  │   └─ Commands:", ', '.join([k for k in VOICE_COMMANDS.keys()]))
         print("  └─ GESTURE: Press SPACE to toggle")
+        print("      └─ Gestures:", ', '.join([k for k in GESTURE_COMMANDS.keys()]))
         print("\n  ESC: Emergency stop & exit")
         print("="*50 + "\n")
     
@@ -261,6 +308,7 @@ class UnifiedRobotController:
         """Stop all robot motors."""
         self.send_command(STOP_ALL)
         self.active_cmds = {k: None for k in self.active_cmds}
+        self.gesture_current_cmd = None
         print("🛑 All motors stopped")
     
     # ========================================================
@@ -405,7 +453,7 @@ class UnifiedRobotController:
         if not self.voice_interpreter:
             print("❌ Cannot start voice mode: model not loaded")
             return
-         
+        
         self.voice_active = True
         self.voice_position = 0
         self.voice_buffer.fill(0)
@@ -560,10 +608,9 @@ class UnifiedRobotController:
             return
         
         self.gesture_active = True
-        self.gesture_direction_forward = True
         self.last_gesture = None
         self.last_gesture_time = 0
-        self.gesture_driving = False
+        self.gesture_current_cmd = None
         
         self.gesture_thread = threading.Thread(
             target=self._gesture_loop,
@@ -576,9 +623,10 @@ class UnifiedRobotController:
         """Stop gesture recognition."""
         self.gesture_active = False
         
-        if self.gesture_driving:
-            self.send_command(STOP_DRIVE)
-            self.gesture_driving = False
+        # Stop any ongoing gesture command
+        if self.gesture_current_cmd:
+            self.send_command(STOP_ALL)
+            self.gesture_current_cmd = None
         
         if self.gesture_thread and self.gesture_thread.is_alive():
             self.gesture_thread.join(timeout=1)
@@ -619,13 +667,18 @@ class UnifiedRobotController:
                 confidence = prediction[idx]
                 
                 # Display info on frame
-                direction = "BACKWARD" if self.gesture_direction_forward else "FORWARD"
-                cv2.putText(frame, f"{gesture}: {confidence:.2f}",
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.putText(frame, f"Next: {direction}",
-                           (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-                cv2.putText(frame, "Press SPACE to exit",
-                           (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
+                cv2.putText(frame, f"Gesture: {gesture}", (10, 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"Confidence: {confidence:.2f}", (10, 70),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # Show current command
+                if self.gesture_current_cmd:
+                    cv2.putText(frame, f"Active: {self.gesture_current_cmd}", (10, 110),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                
+                cv2.putText(frame, "Press SPACE to exit", (10, frame.shape[0] - 20),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
                 
                 cv2.imshow("Gesture Control", frame)
                 cv2.waitKey(1)
@@ -641,7 +694,11 @@ class UnifiedRobotController:
         cv2.destroyAllWindows()
     
     def _handle_gesture_command(self, gesture):
-        """Execute gesture command."""
+        """
+        Execute gesture command based on GESTURE_COMMANDS dictionary.
+        
+        This is the scalable approach - just add new gestures to the dictionary!
+        """
         current_time = time.time()
         
         # Cooldown check
@@ -652,24 +709,33 @@ class UnifiedRobotController:
         if gesture == self.last_gesture:
             return
         
-        # START gesture - move in current direction
-        if gesture == "start":
-            cmd = 'B' if self.gesture_direction_forward else 'F'
-            self.send_command(cmd)
-            direction = "FORWARD" if self.gesture_direction_forward else "BACKWARD"
-            print(f"👋 Gesture: START → {direction}")
-            self.gesture_driving = True
-            self.last_gesture = "start"
+        # Check if gesture is in our command dictionary
+        if gesture not in GESTURE_COMMANDS:
+            # This will help you debug unmapped gestures
+            print(f"⚠ Gesture '{gesture}' detected but not mapped in GESTURE_COMMANDS")
+            self.last_gesture = gesture
             self.last_gesture_time = current_time
+            return
         
-        # STOP gesture - stop and toggle direction
-        elif gesture == "stop":
-            self.send_command(STOP_DRIVE)
-            self.gesture_direction_forward = not self.gesture_direction_forward
-            print("👋 Gesture: STOP → Direction toggled")
-            self.gesture_driving = False
-            self.last_gesture = "stop"
-            self.last_gesture_time = current_time
+        # Get the command for this gesture
+        cmd = GESTURE_COMMANDS[gesture]
+        
+        # Execute the command
+        print(f"👋 Gesture: '{gesture}' → Command: '{cmd}'")
+        
+        # Special handling for STOP command
+        if cmd == STOP_ALL:
+            self.send_command(STOP_ALL)
+            self.gesture_current_cmd = None
+            print("🛑 All motors stopped")
+        else:
+            # Regular command - send it
+            self.send_command(cmd)
+            self.gesture_current_cmd = gesture
+        
+        # Update last gesture tracking
+        self.last_gesture = gesture
+        self.last_gesture_time = current_time
     
     # ========================================================
     #                  MAIN RUN LOOP
@@ -726,7 +792,8 @@ class UnifiedRobotController:
 
 if __name__ == "__main__":
     print("\n" + "="*50)
-    print("    UNIFIED ROBOT CONTROL SYSTEM v1.0")
+    print("    UNIFIED ROBOT CONTROL SYSTEM v1.1")
+    print("    (Scalable Gesture Commands)")
     print("="*50)
     
     controller = UnifiedRobotController()
