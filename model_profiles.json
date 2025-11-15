@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "model": {
+      "name": "model",
+      "model_type": "gesture",
+      "model_path": "resources/gesture_classifier/model.tflite",
+      "labels_path": "resources/gesture_classifier/model_labels.txt",
+      "classes": [],
+      "class_to_letter": {},
+      "custom_gestures": {},
+      "confidence_threshold": 0.7,
+      "settings": {}
+    }
+  },
+  "active_voice": null,
+  "active_gesture": null,
+  "last_used_voice": null,
+  "last_used_gesture": null
+}
