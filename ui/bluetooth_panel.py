@@ -6,11 +6,10 @@ import re
 import subprocess
 import time
 import threading
-import sys
 
 from PySide6.QtWidgets import (QGroupBox, QVBoxLayout, QHBoxLayout, QLabel, 
                                QPushButton, QListWidget, QSpinBox, QMessageBox)
-from PySide6.QtCore import QTimer, Signal, QObject
+from PySide6.QtCore import Signal, Slot
 
 # Try importing bluetooth, handle if not available
 try:
@@ -24,15 +23,26 @@ except ImportError:
 class BluetoothPanel(QGroupBox):
     """Bluetooth device discovery and connection panel."""
     
+    # Custom signals for thread-safe UI updates
+    devices_found = Signal(list)
+    scan_error_signal = Signal(str)
+    connection_failed_signal = Signal(str)
+    
     def __init__(self, backend, signal_emitter, parent=None):
         super().__init__("Bluetooth Setup", parent)
         self.backend = backend
         self.signals = signal_emitter
         self.discovered_devices = []
         self.selected_mac = None
+        
         self._init_ui()
         
-        print("BluetoothPanel initialized")  # DEBUG
+        # Connect internal signals to slots
+        self.devices_found.connect(self._update_scan_result)
+        self.scan_error_signal.connect(self._scan_error)
+        self.connection_failed_signal.connect(self._connection_failed)
+        
+        print("BluetoothPanel initialized")
     
     def _init_ui(self):
         """Initialize UI components."""
@@ -96,13 +106,13 @@ class BluetoothPanel(QGroupBox):
     
     def connect_virtual(self):
         """Connect virtual Bluetooth for testing."""
-        print("connect_virtual called")  # DEBUG
+        print("connect_virtual called")
         self.bt_status.setText("Connecting virtual...")
         self.bt_status.setStyleSheet("color: #ffaa00; font-weight: bold;")
         
         try:
             success = self.backend.bluetooth.connect_virtual()
-            print(f"Virtual connection result: {success}")  # DEBUG
+            print(f"Virtual connection result: {success}")
             
             if success:
                 self.bt_status.setText("VIRTUAL MODE - Simulation Active")
@@ -112,12 +122,12 @@ class BluetoothPanel(QGroupBox):
                 self.bt_status.setText("Virtual connection failed")
                 self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
         except Exception as e:
-            print(f"Error in connect_virtual: {e}")  # DEBUG
+            print(f"Error in connect_virtual: {e}")
             self.signals.log_signal.emit(f"Virtual connection error: {e}", "error")
     
     def scan_bluetooth_devices(self):
         """Start Bluetooth device discovery."""
-        print("scan_bluetooth_devices called")  # DEBUG
+        print("scan_bluetooth_devices called")
         
         if not BLUETOOTH_AVAILABLE:
             QMessageBox.warning(
@@ -137,22 +147,22 @@ class BluetoothPanel(QGroupBox):
         # Start discovery in thread
         thread = threading.Thread(target=self._discover_devices_thread, daemon=True)
         thread.start()
-        print("Discovery thread started")  # DEBUG
+        print("Discovery thread started")
     
     def _discover_devices_thread(self):
         """Background thread for device discovery."""
-        print("_discover_devices_thread started")  # DEBUG
+        print("_discover_devices_thread started")
         try:
             self.signals.log_signal.emit("Discovering (≈10 s)...", "info")
             devices = bluetooth.discover_devices(
                 duration=8, lookup_names=True, flush_cache=True, lookup_class=False
             )
-            print(f"Found {len(devices)} devices")  # DEBUG
+            print(f"Found {len(devices)} devices")
             
             self.discovered_devices = []
             
             if not devices:
-                QTimer.singleShot(0, lambda: self._update_scan_result([]))
+                self.devices_found.emit([])
                 return
             
             for addr, name in devices:
@@ -160,7 +170,7 @@ class BluetoothPanel(QGroupBox):
                     services = bluetooth.find_service(address=addr)
                     channels = [svc["port"] for svc in services if "port" in svc]
                 except Exception as e:
-                    print(f"Error getting services for {addr}: {e}")  # DEBUG
+                    print(f"Error getting services for {addr}: {e}")
                     channels = []
                 
                 self.discovered_devices.append({
@@ -169,18 +179,18 @@ class BluetoothPanel(QGroupBox):
                     "channels": channels or [1],
                 })
             
-            print(f"Processed {len(self.discovered_devices)} devices")  # DEBUG
-            QTimer.singleShot(0, lambda: self._update_scan_result(self.discovered_devices))
+            print(f"Processed {len(self.discovered_devices)} devices")
+            self.devices_found.emit(self.discovered_devices)
         
         except Exception as e:
-            print(f"Error in discovery thread: {e}")  # DEBUG
+            print(f"Error in discovery thread: {e}")
             import traceback
             traceback.print_exc()
-            QTimer.singleShot(0, lambda: self._scan_error(str(e)))
+            self.scan_error_signal.emit(str(e))
     
     def show_paired_devices(self):
         """Get paired devices using bluetoothctl."""
-        print("show_paired_devices called")  # DEBUG
+        print("show_paired_devices called")
         
         self.bt_list.clear()
         self.bt_status.setText("Loading paired devices...")
@@ -190,11 +200,11 @@ class BluetoothPanel(QGroupBox):
         # Start in thread
         thread = threading.Thread(target=self._fetch_paired_devices, daemon=True)
         thread.start()
-        print("Paired devices thread started")  # DEBUG
+        print("Paired devices thread started")
     
     def _fetch_paired_devices(self):
         """Fetch paired devices from bluetoothctl."""
-        print("_fetch_paired_devices started")  # DEBUG
+        print("_fetch_paired_devices started")
         try:
             result = subprocess.run(
                 ["bluetoothctl", "paired-devices"],
@@ -203,15 +213,15 @@ class BluetoothPanel(QGroupBox):
                 timeout=10
             )
             
-            print(f"bluetoothctl return code: {result.returncode}")  # DEBUG
-            print(f"bluetoothctl stdout: {result.stdout}")  # DEBUG
-            print(f"bluetoothctl stderr: {result.stderr}")  # DEBUG
+            print(f"bluetoothctl return code: {result.returncode}")
+            print(f"bluetoothctl stdout: {result.stdout}")
+            print(f"bluetoothctl stderr: {result.stderr}")
             
             devices = []
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
                     line = line.strip()
-                    print(f"Processing line: {line}")  # DEBUG
+                    print(f"Processing line: {line}")
                     
                     if line.startswith("Device "):
                         parts = line.split(" ", 2)
@@ -224,30 +234,33 @@ class BluetoothPanel(QGroupBox):
                                 "channels": [1],
                                 "paired": True
                             })
-                            print(f"Added device: {name} ({mac})")  # DEBUG
+                            print(f"Added device: {name} ({mac})")
             else:
                 error_msg = f"bluetoothctl error: {result.stderr}"
-                print(error_msg)  # DEBUG
+                print(error_msg)
                 self.signals.log_signal.emit(error_msg, "error")
             
-            print(f"Total devices found: {len(devices)}")  # DEBUG
+            print(f"Total devices found: {len(devices)}")
             self.discovered_devices = devices
-            QTimer.singleShot(0, lambda devs=devices: self._update_scan_result(devs))
+            
+            # Emit signal to update UI
+            self.devices_found.emit(devices)
         
         except FileNotFoundError:
             error_msg = "bluetoothctl not found. Install bluez-utils."
-            print(error_msg)  # DEBUG
-            QTimer.singleShot(0, lambda: self._scan_error(error_msg))
+            print(error_msg)
+            self.scan_error_signal.emit(error_msg)
         
         except Exception as e:
-            print(f"Error in _fetch_paired_devices: {e}")  # DEBUG
+            print(f"Error in _fetch_paired_devices: {e}")
             import traceback
             traceback.print_exc()
-            QTimer.singleShot(0, lambda: self._scan_error(str(e)))
+            self.scan_error_signal.emit(str(e))
     
+    @Slot(list)
     def _update_scan_result(self, devices):
-        """Update UI with scan results."""
-        print(f"_update_scan_result called with {len(devices)} devices")  # DEBUG
+        """Update UI with scan results. Runs on main thread."""
+        print(f"_update_scan_result called with {len(devices)} devices (on main thread)")
         
         self.bt_list.clear()
         
@@ -261,18 +274,19 @@ class BluetoothPanel(QGroupBox):
             ch = ",".join(map(str, dev["channels"]))
             paired = " [PAIRED]" if dev.get("paired") else ""
             item_text = f"{dev['name']} ({dev['mac']}) [Ch: {ch}]{paired}"
-            print(f"Adding item to list: {item_text}")  # DEBUG
+            print(f"Adding item to list: {item_text}")
             self.bt_list.addItem(item_text)
         
         self.bt_status.setText(f"Found {len(devices)} device(s)")
         self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;")
         self.signals.log_signal.emit(f"Found {len(devices)} device(s)", "success")
         
-        print("Device list updated")  # DEBUG
+        print(f"Device list updated - list now has {self.bt_list.count()} items")
     
+    @Slot(str)
     def _scan_error(self, msg):
-        """Handle scan error."""
-        print(f"_scan_error called: {msg}")  # DEBUG
+        """Handle scan error. Runs on main thread."""
+        print(f"_scan_error called: {msg} (on main thread)")
         self.bt_status.setText("Scan failed")
         self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
         self.signals.log_signal.emit(f"Scan error: {msg}", "error")
@@ -281,7 +295,7 @@ class BluetoothPanel(QGroupBox):
     def select_bt_device(self, item):
         """Handle device selection."""
         text = item.text()
-        print(f"Device selected: {text}")  # DEBUG
+        print(f"Device selected: {text}")
         
         mac_match = re.search(r'\(([0-9A-Fa-f:]+)\)', text)
         if not mac_match:
@@ -289,7 +303,7 @@ class BluetoothPanel(QGroupBox):
             return
         
         self.selected_mac = mac_match.group(1)
-        print(f"Selected MAC: {self.selected_mac}")  # DEBUG
+        print(f"Selected MAC: {self.selected_mac}")
         
         ch_match = re.search(r'\[Ch: ([0-9,]+)\]', text)
         if ch_match:
@@ -326,13 +340,16 @@ class BluetoothPanel(QGroupBox):
             )
             
             if res.returncode == 0:
-                QTimer.singleShot(0, lambda: self.bt_status.setText(f"Bound to {mac}"))
-                QTimer.singleShot(0, lambda: self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;"))
-                QTimer.singleShot(500, lambda: self.backend.bluetooth.connect_serial())
+                # Update status on main thread
+                self.devices_found.emit([])  # Dummy signal to ensure we're on main thread
+                self.bt_status.setText(f"Bound to {mac}")
+                self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;")
+                time.sleep(0.5)
+                self.backend.bluetooth.connect_serial()
             else:
-                QTimer.singleShot(0, lambda: self._connection_failed(res.stderr or "unknown"))
+                self.connection_failed_signal.emit(res.stderr or "unknown")
         except Exception as e:
-            QTimer.singleShot(0, lambda: self._connection_failed(str(e)))
+            self.connection_failed_signal.emit(str(e))
     
     def connect_via_socket(self):
         """Connect via direct socket."""
@@ -353,13 +370,16 @@ class BluetoothPanel(QGroupBox):
         """Background thread for socket connection."""
         success = self.backend.bluetooth.connect_direct(self.selected_mac, channel)
         if success:
-            QTimer.singleShot(0, lambda: self.bt_status.setText(f"Connected to {self.selected_mac}"))
-            QTimer.singleShot(0, lambda: self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;"))
+            # Update on main thread
+            self.devices_found.emit([])  # Dummy signal
+            self.bt_status.setText(f"Connected to {self.selected_mac}")
+            self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;")
         else:
-            QTimer.singleShot(0, lambda: self._connection_failed("socket failed"))
+            self.connection_failed_signal.emit("socket failed")
     
+    @Slot(str)
     def _connection_failed(self, msg):
-        """Handle connection failure."""
+        """Handle connection failure. Runs on main thread."""
         self.bt_status.setText("Connection failed")
         self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
         self.signals.log_signal.emit(f"Connection failed: {msg}", "error")
