@@ -47,6 +47,28 @@ class ModelConfigDialog(QDialog):
         # Load new model section
         load_group = QGroupBox("Load New Voice Model")
         load_layout = QVBoxLayout()
+
+        # Custom voice commands
+        custom_voice_group = QGroupBox("Custom Voice Commands (Auto-Learn)")
+        custom_voice_layout = QVBoxLayout()
+        
+        custom_voice_btn_layout = QHBoxLayout()
+        
+        add_voice_btn = QPushButton("➕ Add Custom Voice Command")
+        add_voice_btn.clicked.connect(self._add_custom_voice)
+        custom_voice_btn_layout.addWidget(add_voice_btn)
+        
+        remove_voice_btn = QPushButton("➖ Remove Custom Voice")
+        remove_voice_btn.clicked.connect(self._remove_custom_voice)
+        custom_voice_btn_layout.addWidget(remove_voice_btn)
+        
+        custom_voice_layout.addLayout(custom_voice_btn_layout)
+        
+        self.custom_voice_list = QListWidget()
+        custom_voice_layout.addWidget(self.custom_voice_list)
+        
+        custom_voice_group.setLayout(custom_voice_layout)
+        layout.addWidget(custom_voice_group)
         
         btn_layout = QHBoxLayout()
         self.voice_load_btn = QPushButton("Load .tflite and labels.txt")
@@ -81,7 +103,7 @@ class ModelConfigDialog(QDialog):
         
         # Load current mapping
         self._load_voice_mapping()
-        
+        self._refresh_custom_voices() 
         widget.setLayout(layout)
         return widget
     
@@ -330,11 +352,16 @@ class ModelConfigDialog(QDialog):
         self.voice_model_label.setText(f"Model: {model_name}")
         
         mapping = self.backend.voice_controller.get_current_mapping()
-        labels = self.backend.voice_controller.model.get_labels()
         
-        self.voice_table.setRowCount(len(labels))
+        # Get all classes (regular + custom)
+        regular_labels = self.backend.voice_controller.model.get_labels()
+        custom_voices = self.backend.voice_controller.get_custom_voices()
         
-        for i, label in enumerate(labels):
+        all_labels = list(regular_labels) + [f"[CUSTOM] {v}" for v in custom_voices]
+        
+        self.voice_table.setRowCount(len(all_labels))
+        
+        for i, label in enumerate(all_labels):
             # Class name
             class_item = QTableWidgetItem(label)
             class_item.setFlags(class_item.flags() & ~Qt.ItemIsEditable)
@@ -349,6 +376,9 @@ class ModelConfigDialog(QDialog):
             edit_btn = QPushButton("Edit")
             edit_btn.clicked.connect(lambda checked, row=i: self._edit_cell("voice", row))
             self.voice_table.setCellWidget(i, 2, edit_btn)
+        
+        # Refresh custom voices list
+        self._refresh_custom_voices()
     
     def _load_gesture_mapping(self):
         """Load current gesture model mapping into table."""
@@ -435,6 +465,11 @@ class ModelConfigDialog(QDialog):
         
         if success:
             QMessageBox.information(self, "Success", "Mapping saved successfully!")
+            # Refresh the lists to show updated info
+            if model_type == "voice":
+                self._refresh_custom_voices()
+            else:
+                self._refresh_custom_gestures()
         else:
             QMessageBox.critical(self, "Error", "Failed to save mapping.")
     
@@ -488,3 +523,53 @@ class ModelConfigDialog(QDialog):
         gestures = self.backend.gesture_controller.get_custom_gestures()
         for gesture in gestures:
             self.custom_gesture_list.addItem(gesture)
+    def _add_custom_voice(self):
+        """Open dialog to add custom voice command."""
+        from .custom_voice_dialog import CustomVoiceDialog
+        
+        controller = self.backend.voice_controller
+        
+        if not controller.model:
+            QMessageBox.warning(self, "Not Available", 
+                              "Voice model must be loaded first.")
+            return
+        
+        # Get existing letters
+        existing_letters = set(controller.get_current_mapping().values())
+        
+        dialog = CustomVoiceDialog(controller.model, existing_letters, self)
+        
+        if dialog.exec() == QDialog.Accepted:
+            data = dialog.get_voice_data()
+            controller.add_custom_voice(data['name'], data['embeddings'], data['letter'])
+            self._refresh_custom_voices()
+            self._load_voice_mapping()
+            QMessageBox.information(self, "Success", 
+                                  f"Custom voice command '{data['name']}' added successfully!")
+    
+    def _remove_custom_voice(self):
+        """Remove selected custom voice command."""
+        current_item = self.custom_voice_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "No Selection", "Please select a custom voice command to remove.")
+            return
+        
+        voice_name = current_item.text()
+        
+        reply = QMessageBox.question(
+            self, "Confirm Remove",
+            f"Remove custom voice command '{voice_name}'?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.backend.voice_controller.remove_custom_voice(voice_name)
+            self._refresh_custom_voices()
+            self._load_voice_mapping()
+    
+    def _refresh_custom_voices(self):
+        """Refresh custom voice commands list."""
+        self.custom_voice_list.clear()
+        voices = self.backend.voice_controller.get_custom_voices()
+        for voice in voices:
+            self.custom_voice_list.addItem(voice)

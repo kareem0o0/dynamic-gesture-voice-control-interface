@@ -6,11 +6,13 @@ import time
 import cv2
 import numpy as np
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                               QPushButton, QLineEdit, QMessageBox, QProgressBar)
+                               QPushButton, QLineEdit, QMessageBox, QProgressBar,
+                               QSpinBox)
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QImage, QPixmap
 
 from core.embedding_extractor import EmbeddingExtractor
+from config import GESTURE_TRAINING_FRAMES
 
 
 class CustomGestureDialog(QDialog):
@@ -23,11 +25,11 @@ class CustomGestureDialog(QDialog):
         self.existing_letters = existing_letters
         self.embeddings = []
         self.capturing = False
-        self.frames_to_capture = 20
+        self.frames_to_capture = GESTURE_TRAINING_FRAMES
         self.frames_captured = 0
         
         self.setWindowTitle("Create Custom Gesture")
-        self.setMinimumSize(600, 550)
+        self.setMinimumSize(600, 600)
         
         # Initialize extractor
         try:
@@ -47,8 +49,8 @@ class CustomGestureDialog(QDialog):
         instructions = QLabel(
             "1. Enter a name for your gesture\n"
             "2. Assign a unique letter\n"
-            "3. Click 'Start Capture' and perform the gesture\n"
-            "4. Hold the gesture steady for 2-3 seconds"
+            "3. Set number of frames to capture\n"
+            "4. Click 'Start Capture' and hold the gesture steady"
         )
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
@@ -69,6 +71,19 @@ class CustomGestureDialog(QDialog):
         self.letter_input.setPlaceholderText("Single letter")
         letter_layout.addWidget(self.letter_input)
         layout.addLayout(letter_layout)
+        
+        # Frame count input
+        frame_layout = QHBoxLayout()
+        frame_layout.addWidget(QLabel("Frames to Capture:"))
+        self.frame_count_spin = QSpinBox()
+        self.frame_count_spin.setRange(50, 500)
+        self.frame_count_spin.setValue(GESTURE_TRAINING_FRAMES)
+        self.frame_count_spin.setSingleStep(10)
+        self.frame_count_spin.valueChanged.connect(self._on_frame_count_changed)
+        frame_layout.addWidget(self.frame_count_spin)
+        frame_layout.addWidget(QLabel(f"(Default: {GESTURE_TRAINING_FRAMES})"))
+        frame_layout.addStretch()
+        layout.addLayout(frame_layout)
         
         # Video preview
         self.video_label = QLabel("Camera Preview")
@@ -110,6 +125,11 @@ class CustomGestureDialog(QDialog):
         # Timer for video preview
         self.preview_timer = QTimer()
         self.preview_timer.timeout.connect(self._update_preview)
+    
+    def _on_frame_count_changed(self, value):
+        """Handle frame count change."""
+        self.frames_to_capture = value
+        self.progress_bar.setMaximum(value)
     
     def _start_preview(self):
         """Start video preview."""
@@ -198,6 +218,12 @@ class CustomGestureDialog(QDialog):
         }
     
     def closeEvent(self, event):
-        """Stop preview on close."""
+        """Stop preview and release camera on close."""
         self.preview_timer.stop()
+        
+        # Release camera to turn off hardware
+        if self.camera and self.camera.isOpened():
+            self.camera.release()
+            print("Training camera released")
+        
         event.accept()

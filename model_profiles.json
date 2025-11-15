@@ -50,7 +50,8 @@
         "anti": "V",
         "clap": "Q",
         "stop": "!",
-        "Noise": "."
+        "Noise": ".",
+        "[CUSTOM] ko": "k"
       },
       "custom_gestures": {},
       "confidence_threshold": 0.7,

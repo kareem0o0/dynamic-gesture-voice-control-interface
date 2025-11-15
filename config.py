@@ -92,6 +92,24 @@ DEFAULT_GESTURE_MAPPING = {
     "start": "F",
     "stop": "!",
 }
+
+
+# ============================================================
+#                    AUTO-TRAINING CONFIGURATION
+# ============================================================
+
+# Gesture auto-training
+GESTURE_TRAINING_FRAMES = 200  # Number of frames to capture
+GESTURE_TRAINING_FPS = 30      # Frames per second during capture
+
+# Voice auto-training
+VOICE_TRAINING_DURATION = 2.0   # Duration in seconds per sample
+VOICE_TRAINING_SAMPLES_RECOMMENDED = 10  # Recommended number of samples
+
+
+
+
+
 # ============================================================
 #                    MODEL MANAGEMENT
 # ============================================================
