@@ -1,10 +1,10 @@
 """
-Unified Robot Controller with UI
+Unified Robot Controller with UI - Windows Version
 Complete integration of Keyboard, Voice, and Gesture control modes
 with a modern PySide6 interface.
 
 Author: Unified Control System
-Version: 2.0 - Full UI Integration
+Version: 2.0 - Windows Edition
 """
 
 import sys
@@ -17,28 +17,27 @@ import threading
 import time
 import os
 import serial
+import serial.tools.list_ports
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Qt, QTimer, Signal, QObject
-from PySide6.QtGui import QImage, QPixmap, QFont , QColor ,QPalette
-import bluetooth
+from PySide6.QtGui import QImage, QPixmap, QFont, QColor, QPalette
+import asyncio
+from bleak import BleakScanner, BleakClient
 import subprocess
-import re
 
 # ============================================================
 #                    CONFIGURATION SECTION
 # ============================================================
 def resource_path(relative_path):
-    
     """Get absolute path to resource, works for dev and for PyInstaller"""
     try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
     
     return os.path.join(base_path, relative_path)
+
 # Bluetooth Configuration
-PORT = "/dev/rfcomm0"
 BAUD = 9600
 
 # Voice Control Configuration
@@ -112,11 +111,16 @@ class SignalEmitter(QObject):
 def find_camera(max_tries=5):
     """Auto-detect available camera."""
     for i in range(max_tries):
-        cap = cv2.VideoCapture(i)
+        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)  # DirectShow for Windows
         if cap.isOpened():
             return cap
         cap.release()
     return None
+
+def get_com_ports():
+    """Get list of available COM ports."""
+    ports = serial.tools.list_ports.comports()
+    return [(port.device, port.description) for port in ports]
 
 # ============================================================
 #                    ROBOT CONTROLLER BACKEND
@@ -128,9 +132,10 @@ class RobotControllerBackend:
     def __init__(self, signal_emitter):
         self.signals = signal_emitter
         
-        # Bluetooth
+        # Serial/Bluetooth
         self.bt = None
         self.bt_lock = threading.Lock()
+        self.current_port = None
         
         # Mode control
         self.current_mode = "KEYBOARD"
@@ -239,15 +244,17 @@ class RobotControllerBackend:
             self.signals.log_signal.emit(f"Camera ready: {w}x{h}", "success")
     
     # ========================================================
-    #                  BLUETOOTH CONTROL
+    #                  SERIAL/BLUETOOTH CONTROL
     # ========================================================
-    def connect_bluetooth(self, port="/dev/rfcomm0", baud=9600):
-        """Open a serial port (used after rfcomm bind)."""
+    
+    def connect_serial(self, port, baud=9600):
+        """Connect to a COM port."""
         try:
             if self.bt and self.bt.is_open:
                 self.bt.close()
 
             self.bt = serial.Serial(port, baud, timeout=1)
+            self.current_port = port
             time.sleep(2)
             self.signals.log_signal.emit(f"Connected to {port}", "success")
             self.signals.status_signal.emit("Connected")
@@ -256,40 +263,28 @@ class RobotControllerBackend:
             self.signals.log_signal.emit(f"Connection error: {e}", "error")
             self.signals.status_signal.emit("Disconnected")
             return False
-        # ------------------------------------------------------------
-    # NEW METHOD – direct socket connection (no rfcomm)
-    # ------------------------------------------------------------
-    def connect_bluetooth_direct(self, mac_address, channel=1):
-        """Direct RFCOMM socket (no /dev/rfcomm0)."""
-        import socket
-        try:
-            sock = socket.socket(socket.AF_BLUETOOTH,
-                                 socket.SOCK_STREAM,
-                                 socket.BTPROTO_RFCOMM)
-            sock.connect((mac_address, channel))
-
-            # keep the same API as serial.Serial
-            self.bt = sock
-            self.signals.log_signal.emit(f"Direct socket to {mac_address}", "success")
-            self.signals.status_signal.emit("Connected")
-            return True
-        except Exception as e:
-            self.signals.log_signal.emit(f"Direct socket failed: {e}", "error")
-            self.signals.status_signal.emit("Disconnected")
-            return False
+    
+    def disconnect(self):
+        """Disconnect from current port."""
+        with self.bt_lock:
+            if self.bt and self.bt.is_open:
+                self.bt.close()
+                self.bt = None
+                self.current_port = None
+                self.signals.log_signal.emit("Disconnected", "info")
+                self.signals.status_signal.emit("Disconnected")
     
     def send_command(self, cmd):
-        """Send command – works for serial.Serial or socket."""
+        """Send command to robot."""
         with self.bt_lock:
-            if self.bt:
+            if self.bt and self.bt.is_open:
                 try:
-                    if hasattr(self.bt, 'write'):          # serial
-                        self.bt.write(cmd.encode())
-                    else:                                 # socket
-                        self.bt.send(cmd.encode())
+                    self.bt.write(cmd.encode())
                     self.signals.log_signal.emit(f"Sent: {cmd}", "info")
                 except Exception as e:
                     self.signals.log_signal.emit(f"Send error: {e}", "error")
+            else:
+                self.signals.log_signal.emit("Not connected - command not sent", "warning")
     
     def stop_all_motors(self):
         """Stop all motors."""
@@ -617,14 +612,15 @@ class RobotControlUI(QMainWindow):
         self.signals.voice_command_signal.connect(self.show_voice_command)
         self.signals.gesture_command_signal.connect(self.show_gesture_command)
         
-        self.init_ui()
+        # Bluetooth scanning
+        self.bt_devices = []
+        self.selected_port = None
         
-        # Auto-connect
-        #threading.Thread(target=self.backend.connect_bluetooth, daemon=True).start()
+        self.init_ui()
     
     def init_ui(self):
         """Initialize UI components."""
-        self.setWindowTitle("🤖 Unified Robot Controller v2.0")
+        self.setWindowTitle("🤖 Unified Robot Controller v2.0 - Windows Edition")
         self.setGeometry(100, 100, 1400, 800)
         
         # Main widget
@@ -643,9 +639,9 @@ class RobotControlUI(QMainWindow):
         self.video_label.setFixedSize(800, 600)
         self.video_label.setStyleSheet("""
             background: #000; 
-            border: 3px solid #00ff88; 
+            border: 3px solid #0078D4; 
             color: white;
-            border-radius: 10px;
+            border-radius: 5px;
         """)
         self.video_label.setAlignment(Qt.AlignCenter)
         video_layout.addWidget(self.video_label)
@@ -658,20 +654,20 @@ class RobotControlUI(QMainWindow):
         status_layout = QHBoxLayout()
         
         self.connection_status = QLabel("🔴 Disconnected")
-        self.connection_status.setFont(QFont("Arial", 12, QFont.Bold))
+        self.connection_status.setFont(QFont("Segoe UI", 11, QFont.Bold))
         status_layout.addWidget(self.connection_status)
         
         self.mode_display = QLabel("Mode: KEYBOARD")
-        self.mode_display.setFont(QFont("Arial", 12, QFont.Bold))
-        self.mode_display.setStyleSheet("color: #00ff88;")
+        self.mode_display.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.mode_display.setStyleSheet("color: #0078D4;")
         status_layout.addWidget(self.mode_display)
         
         self.voice_indicator = QLabel("")
-        self.voice_indicator.setFont(QFont("Arial", 10))
+        self.voice_indicator.setFont(QFont("Segoe UI", 10))
         status_layout.addWidget(self.voice_indicator)
         
         self.gesture_indicator = QLabel("")
-        self.gesture_indicator.setFont(QFont("Arial", 10))
+        self.gesture_indicator.setFont(QFont("Segoe UI", 10))
         status_layout.addWidget(self.gesture_indicator)
         
         status_layout.addStretch()
@@ -682,6 +678,10 @@ class RobotControlUI(QMainWindow):
         
         # ===== RIGHT PANEL: Controls =====
         right_panel = QVBoxLayout()
+        
+        # Bluetooth/Serial Connection Panel
+        bt_group = self.create_connection_panel()
+        right_panel.addWidget(bt_group)
         
         # Mode selection
         mode_group = QGroupBox("🎮 Control Mode")
@@ -712,7 +712,7 @@ class RobotControlUI(QMainWindow):
         
         # Drive controls
         drive_label = QLabel("Drive:")
-        drive_label.setFont(QFont("Arial", 10, QFont.Bold))
+        drive_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
         manual_layout.addWidget(drive_label, 0, 0, 1, 3)
         
         btn_forward = QPushButton("⬆️ Forward")
@@ -726,7 +726,7 @@ class RobotControlUI(QMainWindow):
         manual_layout.addWidget(btn_left, 2, 0)
         
         btn_stop = QPushButton("⏹️ STOP")
-        btn_stop.setStyleSheet("background: #ff4444; font-weight: bold;")
+        btn_stop.setStyleSheet("background: #D13438; color: white; font-weight: bold;")
         btn_stop.clicked.connect(lambda: self.backend.send_command(STOP_ALL))
         manual_layout.addWidget(btn_stop, 2, 1)
         
@@ -739,14 +739,10 @@ class RobotControlUI(QMainWindow):
         btn_backward.pressed.connect(lambda: self.backend.send_command('B'))
         btn_backward.released.connect(lambda: self.backend.send_command(STOP_DRIVE))
         manual_layout.addWidget(btn_backward, 3, 1)
-
-                # ===== BLUETOOTH SETUP =====
-        bt_group = self.create_bluetooth_panel()
-        right_panel.addWidget(bt_group)
         
         # Arm controls
         arm_label = QLabel("Arms:")
-        arm_label.setFont(QFont("Arial", 10, QFont.Bold))
+        arm_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
         manual_layout.addWidget(arm_label, 4, 0, 1, 3)
         
         arm_btns = [
@@ -778,13 +774,13 @@ class RobotControlUI(QMainWindow):
         
         info_text = QTextEdit()
         info_text.setReadOnly(True)
-        info_text.setMaximumHeight(150)
+        info_text.setMaximumHeight(120)
         info_text.setHtml("""
         <b>Voice Commands:</b><br>
         forward, backward, left, right, stop, up, down, 2up, 2down, clockwise, anti, clap<br><br>
         <b>Gesture Commands:</b><br>
         start (forward), stop (emergency stop)<br><br>
-        <b>Keyboard (wasd Keys + Number Pad):</b><br>
+        <b>Keyboard (WASD + Numpad):</b><br>
         W: Forward | S: Backward | A: Left | D: Right | 1/4: Arm1 | 3/6: Arm2 | 0/2: Arm3 | Q: LED
         """)
         info_layout.addWidget(info_text)
@@ -798,7 +794,7 @@ class RobotControlUI(QMainWindow):
         
         self.log_display = QTextEdit()
         self.log_display.setReadOnly(True)
-        self.log_display.setMaximumHeight(200)
+        self.log_display.setMaximumHeight(180)
         log_layout.addWidget(self.log_display)
         
         log_group.setLayout(log_layout)
@@ -808,266 +804,238 @@ class RobotControlUI(QMainWindow):
         main_layout.addLayout(right_panel, 1)
         
         # Add initial log
-        self.add_log("UI initialized", "success")
+        self.add_log("UI initialized - Windows Edition", "success")
+    
+    # ========================================================
+    #                  CONNECTION PANEL
+    # ========================================================
+    
+    def create_connection_panel(self):
+        """Create the connection setup panel for Windows."""
+        conn_group = QGroupBox("📡 Connection Setup")
+        conn_layout = QVBoxLayout()
+        
+        # Status
+        self.conn_status = QLabel("Status: Not connected")
+        self.conn_status.setStyleSheet("color: #D13438; font-weight: bold;")
+        conn_layout.addWidget(self.conn_status)
+        
+        # Scan buttons
+        btn_layout = QHBoxLayout()
+        
+        scan_serial_btn = QPushButton("🔍 Scan COM Ports")
+        scan_serial_btn.clicked.connect(self.scan_serial_ports)
+        btn_layout.addWidget(scan_serial_btn)
+        
+        scan_bt_btn = QPushButton("🔵 Scan Bluetooth (BLE)")
+        scan_bt_btn.clicked.connect(self.scan_bluetooth_ble)
+        btn_layout.addWidget(scan_bt_btn)
+        
+        conn_layout.addLayout(btn_layout)
+        
+        # Device/Port list
+        self.port_list = QListWidget()
+        self.port_list.itemClicked.connect(self.select_port)
+        conn_layout.addWidget(self.port_list)
+        
+        # Connection controls
+        connect_layout = QHBoxLayout()
+        
+        self.connect_btn = QPushButton("🔌 Connect")
+        self.connect_btn.setEnabled(False)
+        self.connect_btn.clicked.connect(self.connect_to_device)
+        connect_layout.addWidget(self.connect_btn)
+        
+        self.disconnect_btn = QPushButton("🔌 Disconnect")
+        self.disconnect_btn.setEnabled(False)
+        self.disconnect_btn.clicked.connect(self.disconnect_device)
+        connect_layout.addWidget(self.disconnect_btn)
+        
+        conn_layout.addLayout(connect_layout)
+        
+        # Baud rate selector
+        baud_layout = QHBoxLayout()
+        baud_layout.addWidget(QLabel("Baud Rate:"))
+        self.baud_combo = QComboBox()
+        self.baud_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
+        self.baud_combo.setCurrentText("9600")
+        baud_layout.addWidget(self.baud_combo)
+        conn_layout.addLayout(baud_layout)
+        
+        conn_group.setLayout(conn_layout)
+        return conn_group
+    
+    # ========================================================
+    #                  CONNECTION METHODS
+    # ========================================================
+    
+    def scan_serial_ports(self):
+        """Scan for available COM ports."""
+        self.port_list.clear()
+        self.conn_status.setText("Scanning COM ports...")
+        self.conn_status.setStyleSheet("color: #FF8C00; font-weight: bold;")
+        self.add_log("Scanning COM ports...", "info")
+        
+        ports = get_com_ports()
+        
+        if not ports:
+            self.conn_status.setText("No COM ports found")
+            self.conn_status.setStyleSheet("color: #D13438; font-weight: bold;")
+            self.add_log("No COM ports detected", "warning")
+            return
+        
+        for port, desc in ports:
+            self.port_list.addItem(f"{port} - {desc}")
+        
+        self.conn_status.setText(f"Found {len(ports)} COM port(s)")
+        self.conn_status.setStyleSheet("color: #0078D4; font-weight: bold;")
+        self.add_log(f"Found {len(ports)} COM port(s)", "success")
+    
+    def scan_bluetooth_ble(self):
+        """Scan for Bluetooth BLE devices."""
+        self.port_list.clear()
+        self.conn_status.setText("Scanning Bluetooth devices...")
+        self.conn_status.setStyleSheet("color: #FF8C00; font-weight: bold;")
+        self.add_log("Starting Bluetooth BLE scan...", "info")
+        
+        threading.Thread(target=self._scan_ble_thread, daemon=True).start()
+    
+    def _scan_ble_thread(self):
+        """Thread for BLE scanning."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            devices = loop.run_until_complete(self._discover_ble_devices())
+            loop.close()
+            
+            QTimer.singleShot(0, lambda: self._update_ble_results(devices))
+        except Exception as e:
+            QTimer.singleShot(0, lambda: self._scan_ble_error(str(e)))
+    
+    async def _discover_ble_devices(self):
+        """Discover BLE devices."""
+        devices = await BleakScanner.discover(timeout=10.0)
+        return devices
+    
+    def _update_ble_results(self, devices):
+        """Update UI with BLE scan results."""
+        self.port_list.clear()
+        
+        if not devices:
+            self.conn_status.setText("No Bluetooth devices found")
+            self.conn_status.setStyleSheet("color: #D13438; font-weight: bold;")
+            self.add_log("No Bluetooth devices found", "warning")
+            return
+        
+        self.bt_devices = devices
+        for device in devices:
+            name = device.name or "Unknown Device"
+            self.port_list.addItem(f"BLE: {name} ({device.address})")
+        
+        self.conn_status.setText(f"Found {len(devices)} Bluetooth device(s)")
+        self.conn_status.setStyleSheet("color: #0078D4; font-weight: bold;")
+        self.add_log(f"Found {len(devices)} Bluetooth device(s)", "success")
+        self.add_log("Note: BLE devices may require pairing in Windows Settings", "info")
+    
+    def _scan_ble_error(self, error):
+        """Handle BLE scan error."""
+        self.conn_status.setText("Bluetooth scan failed")
+        self.conn_status.setStyleSheet("color: #D13438; font-weight: bold;")
+        self.add_log(f"Bluetooth scan error: {error}", "error")
+        self.add_log("Make sure Bluetooth is enabled in Windows Settings", "warning")
+    
+    def select_port(self, item):
+        """Select a port/device from the list."""
+        text = item.text()
+        
+        if text.startswith("BLE:"):
+            # BLE device selected
+            self.selected_port = None
+            self.add_log("BLE connection not yet implemented - use paired COM port", "warning")
+            self.add_log("Pair device in Windows Settings, then scan COM ports", "info")
+            self.connect_btn.setEnabled(False)
+        else:
+            # COM port selected
+            self.selected_port = text.split(" - ")[0]
+            self.connect_btn.setEnabled(True)
+            self.conn_status.setText(f"Selected: {self.selected_port}")
+            self.conn_status.setStyleSheet("color: #0078D4; font-weight: bold;")
+            self.add_log(f"Selected: {text}", "info")
+    
+    def connect_to_device(self):
+        """Connect to selected device."""
+        if not self.selected_port:
+            self.add_log("No port selected!", "error")
+            return
+        
+        baud = int(self.baud_combo.currentText())
+        self.conn_status.setText(f"Connecting to {self.selected_port}...")
+        self.conn_status.setStyleSheet("color: #FF8C00; font-weight: bold;")
+        
+        threading.Thread(
+            target=self._connect_thread,
+            args=(self.selected_port, baud),
+            daemon=True
+        ).start()
+    
+    def _connect_thread(self, port, baud):
+        """Connection thread."""
+        success = self.backend.connect_serial(port, baud)
+        
+        if success:
+            QTimer.singleShot(0, lambda: self._connection_success(port))
+        else:
+            QTimer.singleShot(0, lambda: self._connection_failed("Connection failed"))
+    
+    def _connection_success(self, port):
+        """Handle successful connection."""
+        self.conn_status.setText(f"Connected to {port}")
+        self.conn_status.setStyleSheet("color: #107C10; font-weight: bold;")
+        self.connect_btn.setEnabled(False)
+        self.disconnect_btn.setEnabled(True)
+        self.add_log(f"Successfully connected to {port}", "success")
+    
+    def _connection_failed(self, msg):
+        """Handle connection failure."""
+        self.conn_status.setText("Connection failed")
+        self.conn_status.setStyleSheet("color: #D13438; font-weight: bold;")
+        self.add_log(f"Connection failed: {msg}", "error")
+        self.add_log("Check: Device paired, correct COM port, driver installed", "warning")
+    
+    def disconnect_device(self):
+        """Disconnect from device."""
+        self.backend.disconnect()
+        self.connect_btn.setEnabled(True)
+        self.disconnect_btn.setEnabled(False)
+        self.conn_status.setText("Disconnected")
+        self.conn_status.setStyleSheet("color: #D13438; font-weight: bold;")
     
     # ========================================================
     #                  UI UPDATE METHODS
     # ========================================================
-        # ------------------------------------------------------------
-    # NEW METHOD – Bluetooth UI panel
-    # ------------------------------------------------------------
-    def create_bluetooth_panel(self):
-        """Create the Bluetooth setup panel."""
-        bt_group = QGroupBox("Bluetooth Setup")
-        bt_layout = QVBoxLayout()
-
-        # ---- status ------------------------------------------------
-        self.bt_status = QLabel("Status: Not connected")
-        self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
-        bt_layout.addWidget(self.bt_status)
-
-        # ---- scan buttons -----------------------------------------
-        btn_layout = QHBoxLayout()
-        scan_new_btn = QPushButton("Discover New Devices")
-        scan_new_btn.clicked.connect(self.scan_bluetooth_devices)
-        btn_layout.addWidget(scan_new_btn)
-
-        scan_paired_btn = QPushButton("Show Paired Devices")
-        scan_paired_btn.clicked.connect(self._get_paired_devices_thread)
-        btn_layout.addWidget(scan_paired_btn)
-        bt_layout.addLayout(btn_layout)
-
-        # ---- device list -------------------------------------------
-        self.bt_list = QListWidget()
-        self.bt_list.itemClicked.connect(self.select_bt_device)
-        bt_layout.addWidget(self.bt_list)
-
-        # ---- connection buttons ------------------------------------
-        connect_layout = QHBoxLayout()
-        self.connect_btn = QPushButton("Connect (rfcomm)")
-        self.connect_btn.setEnabled(False)
-        self.connect_btn.clicked.connect(self.connect_via_rfcomm)
-        connect_layout.addWidget(self.connect_btn)
-
-        self.connect_direct_btn = QPushButton("Direct Connect")
-        self.connect_direct_btn.setEnabled(False)
-        self.connect_direct_btn.clicked.connect(self.connect_via_socket)
-        connect_layout.addWidget(self.connect_direct_btn)
-        bt_layout.addLayout(connect_layout)
-
-        # ---- channel selector --------------------------------------
-        channel_layout = QHBoxLayout()
-        channel_layout.addWidget(QLabel("RFCOMM Channel:"))
-        self.channel_spin = QSpinBox()
-        self.channel_spin.setRange(1, 30)
-        self.channel_spin.setValue(1)
-        channel_layout.addWidget(self.channel_spin)
-        bt_layout.addLayout(channel_layout)
-
-        bt_group.setLayout(bt_layout)
-        return bt_group
-        # ============================================================
-    # BLUETOOTH SCAN / CONNECT METHODS
-    # ============================================================
-
-    # ---- discover new devices ------------------------------------
-    def scan_bluetooth_devices(self):
-        self.bt_list.clear()
-        self.bt_status.setText("Scanning for devices...")
-        self.bt_status.setStyleSheet("color: #ffaa00; font-weight: bold;")
-        self.add_log("Starting Bluetooth discovery...", "info")
-        threading.Thread(target=self._discover_devices_thread, daemon=True).start()
-
-    def _discover_devices_thread(self):
-        try:
-            self.add_log("Discovering (≈10 s)...", "info")
-            devices = bluetooth.discover_devices(
-                duration=8, lookup_names=True, flush_cache=True, lookup_class=False
-            )
-            self.discovered_devices = []
-
-            if not devices:
-                QTimer.singleShot(0, lambda: self._update_scan_result([]))
-                return
-
-            for addr, name in devices:
-                try:
-                    services = bluetooth.find_service(address=addr)
-                    channels = [svc["port"] for svc in services if "port" in svc]
-                except Exception:
-                    channels = []
-                self.discovered_devices.append({
-                    "name": name or "Unknown Device",
-                    "mac": addr,
-                    "channels": channels or [1],
-                })
-            QTimer.singleShot(0, lambda: self._update_scan_result(self.discovered_devices))
-        except Exception as e:
-            QTimer.singleShot(0, lambda: self._scan_error(str(e)))
-
-    # ---- show paired devices ------------------------------------
-
-    def _get_paired_devices_thread(self):
-        """Get paired devices using bluetoothctl (correct command)."""
-        try:
-            result = subprocess.run(
-                ["bluetoothctl", "paired-devices"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            devices = []
-            if result.returncode == 0:
-                for line in result.stdout.splitlines():
-                    line = line.strip()
-                    if line.startswith("Device "):
-                        parts = line.split(" ", 2)
-                        mac = parts[1]
-                        name = parts[2] if len(parts) > 2 else "Unknown"
-                        devices.append({
-                            "name": name,
-                            "mac": mac,
-                            "channels": [1],
-                            "paired": True
-                        })
-            else:
-                self.add_log(f"bluetoothctl error: {result.stderr}", "error")
-
-            self.discovered_devices = devices
-            QTimer.singleShot(0, lambda: self._update_scan_result(devices))
-
-        except Exception as e:
-            QTimer.singleShot(0, lambda: self._scan_error(str(e)))
-    # ---- UI update helpers ---------------------------------------
-    def _update_scan_result(self, devices):
-        self.bt_list.clear()
-        if not devices:
-            self.bt_status.setText("No devices found")
-            self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
-            self.add_log("No devices. Pair via bluetoothctl first.", "warning")
-            return
-
-        for dev in devices:
-            ch = ",".join(map(str, dev["channels"]))
-            paired = " [PAIRED]" if dev.get("paired") else ""
-            self.bt_list.addItem(f"{dev['name']} ({dev['mac']}) [Ch: {ch}]{paired}")
-
-        self.bt_status.setText(f"Found {len(devices)} device(s)")
-        self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;")
-        self.add_log(f"Found {len(devices)} device(s)", "success")
-
-    def _scan_error(self, msg):
-        self.bt_status.setText("Scan failed")
-        self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
-        self.add_log(f"Scan error: {msg}", "error")
-        self.add_log("Check: sudo systemctl start bluetooth", "warning")
-
-    # ---- device selection ----------------------------------------
-    def select_bt_device(self, item):
-        text = item.text()
-        mac_match = re.search(r'\(([0-9A-F:]+)\)', text)
-        if not mac_match:
-            self.add_log("Could not parse MAC", "error")
-            return
-        self.selected_mac = mac_match.group(1)
-
-        ch_match = re.search(r'\[Ch: ([0-9,]+)\]', text)
-        if ch_match:
-            first_ch = ch_match.group(1).split(',')[0]
-            self.channel_spin.setValue(int(first_ch))
-
-        self.connect_btn.setEnabled(True)
-        self.connect_direct_btn.setEnabled(True)
-        self.bt_status.setText(f"Selected: {self.selected_mac}")
-        self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;")
-        self.add_log(f"Selected: {text}", "info")
-
-    # ---- rfcomm connection ---------------------------------------
-    def connect_via_rfcomm(self):
-        if not self.selected_mac:
-            self.add_log("No device selected!", "error")
-            return
-        self.bt_status.setText("Connecting via rfcomm...")
-        self.bt_status.setStyleSheet("color: #ffaa00; font-weight: bold;")
-        threading.Thread(target=self._connect_rfcomm_thread, daemon=True).start()
-
-    def _connect_rfcomm_thread(self):
-        mac = self.selected_mac
-        channel = self.channel_spin.value()
-        try:
-            subprocess.run(["sudo", "rfcomm", "release", "0"], capture_output=True, timeout=3)
-            time.sleep(0.5)
-            res = subprocess.run(
-                ["sudo", "rfcomm", "bind", "0", mac, str(channel)],
-                capture_output=True, text=True, timeout=10
-            )
-            if res.returncode == 0:
-                QTimer.singleShot(0, lambda: self.bt_status.setText(f"Bound to {mac}"))
-                QTimer.singleShot(0, lambda: self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;"))
-                QTimer.singleShot(500, lambda: self.backend.connect_bluetooth("/dev/rfcomm0", 9600))
-            else:
-                QTimer.singleShot(0, lambda: self._connection_failed(res.stderr or "unknown"))
-        except Exception as e:
-            QTimer.singleShot(0, lambda: self._connection_failed(str(e)))
-
-    # ---- direct socket connection --------------------------------
-    def connect_via_socket(self):
-        if not self.selected_mac:
-            self.add_log("No device selected!", "error")
-            return
-        self.bt_status.setText("Connecting via socket...")
-        self.bt_status.setStyleSheet("color: #ffaa00; font-weight: bold;")
-        channel = self.channel_spin.value()
-        threading.Thread(
-            target=self._connect_socket_thread,
-            args=(channel,),
-            daemon=True
-        ).start()
-
-    def _connect_socket_thread(self, channel):
-        success = self.backend.connect_bluetooth_direct(self.selected_mac, channel)
-        if success:
-            QTimer.singleShot(0, lambda: self.bt_status.setText(f"Connected to {self.selected_mac}"))
-            QTimer.singleShot(0, lambda: self.bt_status.setStyleSheet("color: #00ff88; font-weight: bold;"))
-        else:
-            QTimer.singleShot(0, lambda: self._connection_failed("socket failed"))
-
-    def _connection_failed(self, msg):
-        self.bt_status.setText("Connection failed")
-        self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
-        self.add_log(f"Connection failed: {msg}", "error")
     
     def add_log(self, message, level="info"):
         """Add log message with color coding."""
         colors = {
-            "error": "#ff4444",
-            "warning": "#ffaa00",
-            "success": "#00ff88",
-            "info": "#ffffff"
+            "error": "#D13438",
+            "warning": "#FF8C00",
+            "success": "#107C10",
+            "info": "#0078D4"
         }
-        color = colors.get(level, "#ffffff")
+        color = colors.get(level, "#0078D4")
         
         timestamp = time.strftime("%H:%M:%S")
         self.log_display.append(
             f'<span style="color:{color};">[{timestamp}] {message}</span>'
         )
         self.log_display.ensureCursorVisible()
-
+    
     def update_video(self, frame):
         """Update live video feed in the UI."""
         if frame is None:
             return
-        height, width, _ = frame.shape
-        bytes_per_line = 3 * width
-        q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(q_img)
-        scaled = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.video_label.setPixmap(scaled)
-
-
-        # Convert BGR → RGB
-
+        
+        # Convert BGR to RGB
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         height, width, _ = frame_rgb.shape
         bytes_per_line = 3 * width
@@ -1075,7 +1043,7 @@ class RobotControlUI(QMainWindow):
         pixmap = QPixmap.fromImage(q_img)
         scaled = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(scaled)
-
+    
     def update_mode_display(self, mode):
         """Update current control mode display."""
         self.mode_display.setText(f"Mode: <b>{mode}</b>")
@@ -1083,38 +1051,39 @@ class RobotControlUI(QMainWindow):
         self.keyboard_btn.setChecked(mode == "KEYBOARD")
         self.voice_btn.setChecked(mode == "VOICE")
         self.gesture_btn.setChecked(mode == "GESTURE")
-
+    
     def update_status(self, status):
         """Update connection status indicator."""
         if status == "Connected":
             self.connection_status.setText("🟢 Connected")
-            self.connection_status.setStyleSheet("color: #00ff88; font-weight: bold;")
+            self.connection_status.setStyleSheet("color: #107C10; font-weight: bold;")
         else:
             self.connection_status.setText("🔴 Disconnected")
-            self.connection_status.setStyleSheet("color: #ff4444; font-weight: bold;")
-
+            self.connection_status.setStyleSheet("color: #D13438; font-weight: bold;")
+    
     def show_voice_command(self, command, confidence):
         """Show recognized voice command with confidence."""
         self.voice_indicator.setText(f"🎤 {command} ({confidence:.2f})")
         QTimer.singleShot(2000, lambda: self.voice_indicator.setText(""))
-
+    
     def show_gesture_command(self, gesture, confidence):
         """Show recognized gesture command."""
         self.gesture_indicator.setText(f"👋 {gesture} ({confidence:.2f})")
         QTimer.singleShot(2000, lambda: self.gesture_indicator.setText(""))
-
+    
     # ========================================================
-    # KEYBOARD CONTROL INTEGRATION
+    #                  KEYBOARD CONTROL
     # ========================================================
+    
     def keyPressEvent(self, event):
         """Handle keyboard press for robot control."""
         if self.backend.current_mode != "KEYBOARD":
             return super().keyPressEvent(event)
-
+        
         key = event.key()
         cmd = None
         stop_cmd = None
-
+        
         # Drive controls (WASD)
         if key == Qt.Key_W:
             cmd = 'F'
@@ -1128,7 +1097,7 @@ class RobotControlUI(QMainWindow):
         elif key == Qt.Key_D:
             cmd = 'R'
             stop_cmd = STOP_DRIVE
-
+        
         # Arm 1 (1 / 4)
         elif key == Qt.Key_1:
             cmd = 'Z'
@@ -1136,7 +1105,7 @@ class RobotControlUI(QMainWindow):
         elif key == Qt.Key_4:
             cmd = 'A'
             stop_cmd = STOP_ARM1
-
+        
         # Arm 2 (3 / 6)
         elif key == Qt.Key_3:
             cmd = 'S'
@@ -1144,7 +1113,7 @@ class RobotControlUI(QMainWindow):
         elif key == Qt.Key_6:
             cmd = 'X'
             stop_cmd = STOP_ARM2
-
+        
         # Arm 3 (0 / 2)
         elif key == Qt.Key_0:
             cmd = 'C'
@@ -1152,29 +1121,29 @@ class RobotControlUI(QMainWindow):
         elif key == Qt.Key_2:
             cmd = 'V'
             stop_cmd = STOP_ARM3
-
+        
         # LED toggle
         elif key == Qt.Key_Q:
             self.backend.send_command(TOGGLE_LED)
             return
-
+        
         # Emergency stop
         elif key == Qt.Key_Escape:
             self.backend.stop_all_motors()
             return
-
+        
         if cmd:
             self.backend.active_cmds['drive' if cmd in 'FBLR' else 'arm1' if cmd in 'ZA' else 'arm2' if cmd in 'SX' else 'arm3'] = cmd
             self.backend.send_command(cmd)
-
+    
     def keyReleaseEvent(self, event):
         """Handle key release to stop motors."""
         if self.backend.current_mode != "KEYBOARD":
             return super().keyReleaseEvent(event)
-
+        
         key = event.key()
         stop_cmd = None
-
+        
         if key in (Qt.Key_W, Qt.Key_S, Qt.Key_A, Qt.Key_D):
             stop_cmd = STOP_DRIVE
         elif key in (Qt.Key_1, Qt.Key_4):
@@ -1183,7 +1152,7 @@ class RobotControlUI(QMainWindow):
             stop_cmd = STOP_ARM2
         elif key in (Qt.Key_0, Qt.Key_2):
             stop_cmd = STOP_ARM3
-
+        
         if stop_cmd:
             # Only stop if this was the active command
             active = self.backend.active_cmds.get('drive' if stop_cmd == STOP_DRIVE else
@@ -1194,10 +1163,11 @@ class RobotControlUI(QMainWindow):
                 self.backend.active_cmds['drive' if stop_cmd == STOP_DRIVE else
                                      'arm1' if stop_cmd == STOP_ARM1 else
                                      'arm2' if stop_cmd == STOP_ARM2 else 'arm3'] = None
-
+    
     # ========================================================
-    # CLEANUP ON CLOSE
+    #                  CLEANUP
     # ========================================================
+    
     def closeEvent(self, event):
         """Handle window close - clean shutdown."""
         reply = QMessageBox.question(
@@ -1212,29 +1182,27 @@ class RobotControlUI(QMainWindow):
 
 
 # ============================================================
-# APPLICATION ENTRY POINT
+#                  APPLICATION ENTRY POINT
 # ============================================================
+
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")  # Modern look
-
-    # ---------- DARK THEME (CORRECTED: no ColorGroup) ----------
-    palette = QPalette()  # Start with a fresh palette
-
-    # Use ColorRole only (applies to Active, Inactive, Disabled)
-    palette.setColor(QPalette.ColorRole.Window,        QColor(30, 30, 30))
-    palette.setColor(QPalette.ColorRole.WindowText,    QColor(255, 255, 255))
-    palette.setColor(QPalette.ColorRole.Base,          QColor(45, 45, 45))
-    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(35, 35, 35))
-    palette.setColor(QPalette.ColorRole.Text,          QColor(255, 255, 255))
-    palette.setColor(QPalette.ColorRole.Button,        QColor(50, 50, 50))
-    palette.setColor(QPalette.ColorRole.ButtonText,    QColor(255, 255, 255))
-    palette.setColor(QPalette.ColorRole.Highlight,     QColor(0, 120, 215))
+    
+    # Windows-style theme
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window, QColor(240, 240, 240))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(0, 0, 0))
+    palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(245, 245, 245))
+    palette.setColor(QPalette.ColorRole.Text, QColor(0, 0, 0))
+    palette.setColor(QPalette.ColorRole.Button, QColor(240, 240, 240))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(0, 0, 0))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 212))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
-
+    
     app.setPalette(palette)
-    # ---------------------------------------------------------
-
+    
     window = RobotControlUI()
     window.show()
     sys.exit(app.exec())
