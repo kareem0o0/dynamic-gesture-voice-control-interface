@@ -127,6 +127,8 @@ class RobotControllerBackend:
                 self.voice_controller.stop()
             elif self.current_mode == MODE_GESTURE:
                 self.gesture_controller.stop()
+                # Clear video feed when leaving gesture mode
+                self.signals.frame_signal.emit(None)
             
             # Start new mode
             self.current_mode = new_mode
@@ -136,9 +138,12 @@ class RobotControllerBackend:
                 self.voice_controller.start()
             elif new_mode == MODE_GESTURE:
                 self.gesture_controller.start()
+            else:
+                # Switching to keyboard mode - ensure camera is cleared
+                self.signals.frame_signal.emit(None)
             
             self.signals.log_signal.emit(f"Now in {new_mode} mode", "success")
-    
+
     def cleanup(self):
         """Cleanup all resources."""
         self.running = False

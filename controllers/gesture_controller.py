@@ -172,9 +172,14 @@ class GestureController(BaseController):
             self.signals.log_signal.emit("Gesture mapping incomplete - configure letters first", "error")
             return
         
-        if not self.camera:
-            self.signals.log_signal.emit("No camera available", "error")
-            return
+        # Reopen camera if it was released
+        if self.camera is None or not self.camera.isOpened():
+            from utils.camera import find_camera
+            self.camera = find_camera()
+            if not self.camera:
+                self.signals.log_signal.emit("No camera available", "error")
+                return
+            print("Camera reopened")
         
         self.active = True
         self.last_gesture = None
@@ -184,32 +189,46 @@ class GestureController(BaseController):
         self.thread = threading.Thread(target=self._recognition_loop, daemon=True)
         self.thread.start()
         self.signals.log_signal.emit("Gesture recognition active", "success")
-    
+
     def stop(self):
-            """Stop gesture recognition."""
-            self.active = False
-            
-            if self.current_cmd:
-                self.executor.send_command('!')  # Stop all
-                self.current_cmd = None
-            
-            if self.thread and self.thread.is_alive():
-                self.thread.join(timeout=1)
-            
-            # Clear the video display by sending None frame
-            self.signals.frame_signal.emit(None)
-            
-            self.signals.log_signal.emit("Gesture recognition stopped", "info")
-    
+        """Stop gesture recognition."""
+        self.active = False
+        
+        if self.current_cmd:
+            self.executor.send_command('!')  # Stop all
+            self.current_cmd = None
+        
+        # Wait for thread to finish
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=2)
+        
+        # Release the camera to turn off the hardware
+        if self.camera and self.camera.isOpened():
+            self.camera.release()
+            print("Camera released")
+        
+        # Clear the video display
+        self.signals.frame_signal.emit(None)
+        
+        self.signals.log_signal.emit("Gesture recognition stopped", "info")
+
     def _recognition_loop(self):
         """Main gesture recognition loop with custom gesture support."""
         while self.active:
+            # Check active flag at the start of each iteration
+            if not self.active:
+                break
+                
             ret, frame = self.camera.read()
             if not ret or frame is None:
                 time.sleep(0.1)
                 continue
             
             try:
+                # Check active flag before processing
+                if not self.active:
+                    break
+                
                 # Convert to RGB
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
@@ -261,20 +280,24 @@ class GestureController(BaseController):
                     cv2.putText(frame, f"Active: {self.current_cmd}", (10, 170),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
                 
-                # Send frame to UI
-                self.signals.frame_signal.emit(frame)
+                # Send frame to UI (only if still active)
+                if self.active:
+                    self.signals.frame_signal.emit(frame)
                 
                 # Process command
                 threshold = self.custom_gesture_threshold if is_custom else GESTURE_CONFIDENCE_THRESHOLD
-                if confidence > threshold and detected_letter:
+                if confidence > threshold and detected_letter and self.active:
                     self._handle_gesture(detected_class, detected_letter, confidence)
             
             except Exception as e:
-                self.signals.log_signal.emit(f"Gesture error: {e}", "error")
-                print(f"Recognition loop error: {e}")
-                import traceback
-                traceback.print_exc()
+                if self.active:  # Only log if we're supposed to be active
+                    self.signals.log_signal.emit(f"Gesture error: {e}", "error")
+                    print(f"Recognition loop error: {e}")
                 continue
+        
+        # Ensure we emit None when loop exits
+        self.signals.frame_signal.emit(None)
+        print("Gesture recognition loop exited")
     
     def _handle_gesture(self, gesture, letter, confidence):
         """Execute gesture command."""
