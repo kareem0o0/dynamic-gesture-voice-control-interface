@@ -160,7 +160,7 @@ class RobotControlUI(QMainWindow):
     
     def _create_mode_selector(self):
         """Create mode selection widget."""
-        mode_group = QGroupBox("🎮 Control Mode")
+        mode_group = QGroupBox("🎮 Control Mode     ")
         layout = QVBoxLayout()
         
         self.keyboard_btn = QPushButton("⌨️ Keyboard Control")
@@ -184,7 +184,7 @@ class RobotControlUI(QMainWindow):
     
     def _create_info_panel(self):
         """Create command info panel."""
-        info_group = QGroupBox("ℹ️ Quick Reference")
+        info_group = QGroupBox("ℹ️ Quick Reference    ")
         layout = QVBoxLayout()
         
         info_text = QTextEdit()
@@ -203,7 +203,7 @@ class RobotControlUI(QMainWindow):
     
     def _create_log_panel(self):
         """Create activity log panel."""
-        log_group = QGroupBox("📝 Activity Log")
+        log_group = QGroupBox("📝 Activity Log    ")
         layout = QVBoxLayout()
         
         self.log_display = QTextEdit()

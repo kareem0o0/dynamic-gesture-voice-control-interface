@@ -12,7 +12,7 @@ class ControlPanel(QGroupBox):
     """Manual control buttons for robot."""
     
     def __init__(self, backend, parent=None):
-        super().__init__("🕹️ Manual Controls", parent)
+        super().__init__("🕹️ Manual Controls     ", parent)
         self.backend = backend
         self._init_ui()
     
@@ -21,7 +21,7 @@ class ControlPanel(QGroupBox):
         layout = QVBoxLayout()
         
         # Drive controls section
-        drive_group = QGroupBox("🚗 Drive Controls")
+        drive_group = QGroupBox("🚗 Drive Controls    ")
         drive_layout = QGridLayout()
         
         btn_forward = QPushButton("⬆️ Forward")
@@ -53,7 +53,7 @@ class ControlPanel(QGroupBox):
         layout.addWidget(drive_group)
         
         # Arm controls section
-        arm_group = QGroupBox("🦾 Arm Controls")
+        arm_group = QGroupBox("🦾 Arm Controls    ")
         arm_layout = QGridLayout()
         
         # Arm 1 - Column 0

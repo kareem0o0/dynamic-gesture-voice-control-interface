@@ -14,7 +14,7 @@ class VideoDisplay(QGroupBox):
     """Video display widget for live camera feed."""
     
     def __init__(self, parent=None):
-            super().__init__("📹 Live Camera Feed (Gesture Mode)", parent)
+            super().__init__("📹 Live Camera Feed (Gesture Mode)     ", parent)
             self._init_ui()
     
     def _init_ui(self):
