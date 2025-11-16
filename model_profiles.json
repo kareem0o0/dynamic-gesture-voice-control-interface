@@ -38,28 +38,27 @@
         "up"
       ],
       "class_to_letter": {
-        "forward": "F",
+        "2down": "X",
+        "2up": "S",
+        "Noise": ".",
+        "anti": "V",
         "backward": "B",
+        "clap": "Q",
+        "clockwise": "C",
+        "down": "A",
+        "forward": "F",
         "left": "L",
         "right": "R",
-        "up": "Z",
-        "down": "A",
-        "2up": "S",
-        "2down": "X",
-        "clockwise": "C",
-        "anti": "V",
-        "clap": "Q",
         "stop": "!",
-        "Noise": ".",
-        "[CUSTOM] ko": "k"
+        "up": "Z"
       },
       "custom_gestures": {},
       "confidence_threshold": 0.7,
       "settings": {}
     }
   },
-  "active_voice": null,
+  "active_voice": "soundclassifier_with_metadata",
   "active_gesture": null,
-  "last_used_voice": null,
+  "last_used_voice": "soundclassifier_with_metadata",
   "last_used_gesture": null
 }
