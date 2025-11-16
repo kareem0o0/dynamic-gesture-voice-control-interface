@@ -44,20 +44,7 @@ class ModelConfigDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout()
         
-        # Load new model section FIRST (to match gesture tab for UI symmetry)
-        load_group = QGroupBox("Load New Voice Model")
-        load_layout = QVBoxLayout()
-        
-        btn_layout = QHBoxLayout()
-        self.voice_load_btn = QPushButton("Load .tflite and labels.txt")
-        self.voice_load_btn.clicked.connect(lambda: self._load_new_model("voice"))
-        btn_layout.addWidget(self.voice_load_btn)
-        load_layout.addLayout(btn_layout)
-        
-        load_group.setLayout(load_layout)
-        layout.addWidget(load_group)
-        
-        # Custom voice commands section SECOND
+        # Custom voice commands section FIRST (to match gesture tab)
         custom_voice_group = QGroupBox("Custom Voice Commands (Auto-Learn)")
         custom_voice_layout = QVBoxLayout()
         
@@ -78,6 +65,19 @@ class ModelConfigDialog(QDialog):
         
         custom_voice_group.setLayout(custom_voice_layout)
         layout.addWidget(custom_voice_group)
+        
+        # Load new model section SECOND (to match gesture tab)
+        load_group = QGroupBox("Load New Voice Model")
+        load_layout = QVBoxLayout()
+        
+        btn_layout = QHBoxLayout()
+        self.voice_load_btn = QPushButton("Load .tflite and labels.txt")
+        self.voice_load_btn.clicked.connect(lambda: self._load_new_model("voice"))
+        btn_layout.addWidget(self.voice_load_btn)
+        load_layout.addLayout(btn_layout)
+        
+        load_group.setLayout(load_layout)
+        layout.addWidget(load_group)
         
         # Current model section (remains at bottom)
         current_group = QGroupBox("Current Voice Model Mapping")
@@ -549,10 +549,7 @@ class ModelConfigDialog(QDialog):
         # Get existing letters
         existing_letters = set(controller.get_current_mapping().values())
         
-        # Get existing custom voice names
-        existing_names = controller.get_custom_voices()
-        
-        dialog = CustomVoiceDialog(controller.model, existing_letters, existing_names, self)
+        dialog = CustomVoiceDialog(controller.model, existing_letters, self)
         
         if dialog.exec() == QDialog.Accepted:
             data = dialog.get_voice_data()
@@ -588,4 +585,39 @@ class ModelConfigDialog(QDialog):
         voices = self.backend.voice_controller.get_custom_voices()
         for voice in voices:
             self.custom_voice_list.addItem(voice)
-    
+    def _delete_class(self, model_type, class_name):
+        """Delete a class from the model mapping."""
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            f"Remove class '{class_name}' from mapping?\n\n"
+            "This will prevent the model from responding to this class.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            if model_type == "voice":
+                controller = self.backend.voice_controller
+            else:
+                controller = self.backend.gesture_controller
+            
+            # Get current mapping
+            mapping = controller.get_current_mapping()
+            
+            # Remove the class
+            if class_name in mapping:
+                del mapping[class_name]
+                
+                # Update the mapping
+                controller.update_mapping(mapping)
+                
+                # Refresh display
+                if model_type == "voice":
+                    self._load_voice_mapping()
+                else:
+                    self._load_gesture_mapping()
+                
+                QMessageBox.information(self, "Success", f"Class '{class_name}' removed from mapping.")
+            else:
+                QMessageBox.warning(self, "Not Found", f"Class '{class_name}' not found in mapping.")

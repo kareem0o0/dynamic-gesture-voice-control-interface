@@ -1,4 +1,4 @@
-#!/home/kemo/takamul/SuperClawBot/SuperClawBot/bin/python3
+#!/home/kemo/my_work/SuperClawBot/SuperClawBot/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
