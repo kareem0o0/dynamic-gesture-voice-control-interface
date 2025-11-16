@@ -4,6 +4,7 @@ Bluetooth connection panel UI component.
 
 import re
 import subprocess
+import platform
 import time
 import threading
 
@@ -192,10 +193,26 @@ class BluetoothPanel(QGroupBox):
         self.bt_status.setStyleSheet("color: #ffaa00; font-weight: bold;")
         self.signals.log_signal.emit("Fetching paired devices...", "info")
         
-        # Start in thread
-        thread = threading.Thread(target=self._fetch_paired_devices, daemon=True)
-        thread.start()
-        print("Paired devices thread started")
+        # On Linux we can use bluetoothctl; on other OSes try PyBluez if available
+        if platform.system() == "Linux":
+            thread = threading.Thread(target=self._fetch_paired_devices, daemon=True)
+            thread.start()
+            print("Paired devices thread started (bluetoothctl)")
+            return
+
+        if BLUETOOTH_AVAILABLE:
+            # PyBluez can discover devices (may not list 'paired' state reliably on all OSes)
+            thread = threading.Thread(target=self._fetch_paired_devices_pybluez, daemon=True)
+            thread.start()
+            print("Paired devices thread started (pybluez discover)")
+            return
+
+        QMessageBox.information(
+            self,
+            "Paired Devices",
+            "Fetching paired devices via system tools is only supported on Linux (bluetoothctl).\n"
+            "Install PyBluez for limited discovery support or use system Bluetooth settings/virtual mode."
+        )
     
     def _fetch_paired_devices(self):
         """Fetch paired devices from bluetoothctl."""
@@ -251,6 +268,34 @@ class BluetoothPanel(QGroupBox):
             import traceback
             traceback.print_exc()
             self.scan_error_signal.emit(str(e))
+
+    def _fetch_paired_devices_pybluez(self):
+        """Discover devices using PyBluez as a fallback on non-Linux platforms.
+
+        Note: PyBluez may not provide an explicit 'paired' flag on all platforms. This
+        will perform a short discovery and present devices to the user for selection.
+        """
+        print("_fetch_paired_devices_pybluez started")
+        try:
+            self.signals.log_signal.emit("Discovering nearby devices (PyBluez)...", "info")
+            devices = bluetooth.discover_devices(duration=8, lookup_names=True)
+            result = []
+            for addr, name in devices:
+                result.append({
+                    "name": name or "Unknown Device",
+                    "mac": addr,
+                    "channels": [1],
+                    "paired": False,
+                })
+
+            self.discovered_devices = result
+            self.devices_found.emit(result)
+
+        except Exception as e:
+            print(f"Error in _fetch_paired_devices_pybluez: {e}")
+            import traceback
+            traceback.print_exc()
+            self.scan_error_signal.emit(str(e))
     
     @Slot(list)
     def _update_scan_result(self, devices):
@@ -285,7 +330,10 @@ class BluetoothPanel(QGroupBox):
         self.bt_status.setText("Scan failed")
         self.bt_status.setStyleSheet("color: #ff4444; font-weight: bold;")
         self.signals.log_signal.emit(f"Scan error: {msg}", "error")
-        self.signals.log_signal.emit("Check: sudo systemctl start bluetooth", "warning")
+        if platform.system() == "Linux":
+            self.signals.log_signal.emit("Check: sudo systemctl start bluetooth", "warning")
+        else:
+            self.signals.log_signal.emit("Check your system Bluetooth settings or install PyBluez (pip install pybluez)", "warning")
     
     def select_bt_device(self, item):
             """Handle device selection."""

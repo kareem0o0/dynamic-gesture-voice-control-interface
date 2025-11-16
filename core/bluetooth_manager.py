@@ -6,6 +6,7 @@ import time
 import serial
 import socket
 import threading
+import platform
 
 from config import BLUETOOTH_PORT, BLUETOOTH_BAUD
 from .virtual_bluetooth import VirtualBluetoothConnection
@@ -62,19 +63,39 @@ class BluetoothManager:
         try:
             if self.connection:
                 self.disconnect()
-            
-            sock = socket.socket(socket.AF_BLUETOOTH,
-                               socket.SOCK_STREAM,
-                               socket.BTPROTO_RFCOMM)
-            sock.connect((mac_address, channel))
-            
+
+            # Preferred: use native AF_BLUETOOTH RFCOMM sockets (Linux / modern BSDs)
+            try:
+                sock = socket.socket(socket.AF_BLUETOOTH,
+                                       socket.SOCK_STREAM,
+                                       socket.BTPROTO_RFCOMM)
+                sock.connect((mac_address, channel))
+
+            except (AttributeError, OSError):
+                # socket.AF_BLUETOOTH not available or unsupported on this platform.
+                # Try a PyBluez fallback if available (works on Windows with appropriate drivers).
+                try:
+                    import bluetooth as _bluetooth  # PyBluez
+                    sock = _bluetooth.BluetoothSocket(_bluetooth.RFCOMM)
+                    sock.connect((mac_address, channel))
+                except Exception:
+                    # Fallback failed; report clearly and suggest alternatives.
+                    msg = (
+                        "Direct RFCOMM sockets are not supported on this platform and "
+                        "PyBluez fallback failed. Use virtual connection or serial/COM bridge instead."
+                    )
+                    self.signals.log_signal.emit(msg, "error")
+                    self.signals.status_signal.emit("Disconnected")
+                    return False
+
+            # If we get here, sock is a connected socket-like object
             self.connection = sock
             self.connection_type = 'socket'
-            
+
             self.signals.log_signal.emit(f"Direct socket to {mac_address}", "success")
             self.signals.status_signal.emit("Connected")
             return True
-        
+
         except Exception as e:
             self.signals.log_signal.emit(f"Direct socket failed: {e}", "error")
             self.signals.status_signal.emit("Disconnected")
