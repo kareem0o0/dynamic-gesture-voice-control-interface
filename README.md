@@ -239,3 +239,25 @@ This project is open source. See LICENSE file for details.
 
 For issues, questions, or contributions, please open an issue on GitHub.
 
+
+**Playground Branch — Build Artifacts**
+
+- **What changed:** The `playground` branch contains a small build workflow used for packaging the app with PyInstaller. Added files include:
+   - `scripts/build_app.sh` — Bash helper to run PyInstaller and bundle data folders.
+   - `README_BUILD.md` — Build instructions and troubleshooting notes for PyInstaller builds.
+   - `app/` — A one-folder PyInstaller build of the application (bundled executable and data). Note: this folder was added for convenience and testing.
+
+- **Important notes:**
+   - This build is OS- and architecture-specific. The binary in `app/` will only run on the same OS/arch it was built on.
+   - The repository also contained a Python virtual environment; it's recommended to keep virtualenvs out of the repo. Consider updating `.gitignore` to exclude `SuperClawBot/` (the venv) and other environment artifacts.
+   - For distribution to other users, prefer creating releases (GitHub Releases, AppImage for Linux, or OS installers) rather than committing large binaries to the repository history.
+
+- **Quick run:** To run the included app (on a matching Linux system):
+
+```bash
+cd app
+./SuperClawBot
+```
+
+If you want, I can update `.gitignore` to remove the virtualenv and large build files from the repository and clean up the git history — tell me if you want me to proceed with that.
+
