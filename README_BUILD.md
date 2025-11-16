@@ -55,4 +55,26 @@ Next steps (optional)
 - Convert to `--onefile` if you prefer a single executable (may require handling of data extraction at runtime).
 - Create OS-specific installer packages (deb, rpm, nsis, dmg) using external tools.
 
+Windows build
+-------------
+For Windows, there is a PowerShell helper `scripts/build_windows.ps1` that runs PyInstaller using the Windows `--add-data` separator (`;`).
+
+Quick Windows build steps (PowerShell):
+
+```powershell
+# open PowerShell in repository root
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install pyinstaller
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+.
+\scripts\build_windows.ps1
+```
+
+Notes:
+- The produced `dist\SuperClawBot` folder is Windows-specific. Build on Windows to produce a runnable binary for Windows users.
+- If you plan to distribute a single EXE, consider `--onefile` but test resource access carefully.
+
+
 If you want, I can run the build next (requires `pyinstaller` installed); you asked not to push, so I will not push any changes to the remote.

@@ -1,3 +1,25 @@
+# Virtual environment
+SuperClawBot/
+venv/
+.venv/
+
+# PyInstaller build artifacts
+dist/
+build/
+App/
+app/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+*.swp
 # Python
 __pycache__/
 *.py[cod]

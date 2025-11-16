@@ -13,6 +13,19 @@ from PySide6.QtGui import QPalette, QColor
 
 from ui import SignalEmitter, RobotControlUI
 from core import RobotControllerBackend
+import os
+
+
+def get_resource_path(relative_path: str) -> str:
+    """
+    Return absolute path to resource, works for dev and PyInstaller bundle.
+    Usage: get_resource_path("resources/icons/icon.png")
+    """
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
 
 
 def setup_dark_theme(app):
