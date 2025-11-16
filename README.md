@@ -27,7 +27,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 - Bluetooth connection management
 
 ### 🔧 Advanced Features
-- Bluetooth communication (Serial, Socket, or Virtual mode)
+- Universal UART communication (supports Bluetooth, USB serial, or Virtual mode)
 - Save/load complete configurations
 - Profile management system
 - Frame rate limiting for performance
@@ -37,10 +37,10 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 ### Prerequisites
 - Python 3.8 or higher
-- Linux (tested on Ubuntu/Debian)
+- Linux (tested on Ubuntu/Debian) or Windows
 - Camera (for gesture control)
 - Microphone (for voice control)
-- Bluetooth adapter (for robot communication)
+- UART-compatible controller (via Bluetooth, USB serial, or other serial interface)
 
 ### Setup
 
@@ -70,11 +70,11 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 ### 1. Connect to Robot
 - Open the application
-- Go to **Bluetooth Setup** panel
+- Go to **Connection Setup** panel
 - Choose connection method:
   - **Virtual Mode**: For testing without hardware
   - **Direct Socket**: Connect via Bluetooth MAC address
-  - **Serial Port**: Connect via `/dev/rfcomm0` (requires rfcomm setup)
+  - **Serial Port**: Connect via any UART interface (e.g., `/dev/ttyUSB0`, `/dev/rfcomm0`, or COM ports on Windows)
 
 ### 2. Load Models
 - Go to **Models → Configure Models**
@@ -107,7 +107,7 @@ Place your TensorFlow Lite models in:
 
 ### Configuration File
 Edit `config.py` to customize:
-- Bluetooth port and baud rate
+- Serial/UART port and baud rate
 - Voice/gesture confidence thresholds
 - Training parameters
 - UI settings
@@ -186,10 +186,20 @@ SuperClawBot/
 - Verify default input device: `python -c "import sounddevice; print(sounddevice.query_devices())"`
 - Ensure microphone is not muted in system settings
 
-### Bluetooth Connection Issues
-- Use **Virtual Mode** for testing without hardware
-- For serial connection, ensure rfcomm is bound: `sudo rfcomm bind 0 <MAC_ADDRESS> 1`
-- Check Bluetooth adapter: `hciconfig` or `bluetoothctl`
+### UART Connection Issues
+The application supports universal UART communication through multiple interfaces:
+
+**Connection Methods:**
+- **Bluetooth (Wireless)**: Use Direct Socket mode with MAC address or Serial Port mode with `/dev/rfcomm0` (Linux) after binding
+- **USB Serial (Wired)**: Use Serial Port mode with device path (e.g., `/dev/ttyUSB0`, `/dev/ttyACM0` on Linux or `COM3`, `COM4` on Windows)
+- **Virtual Mode**: For testing application features without physical hardware
+
+**Troubleshooting:**
+- Verify device path exists: `ls /dev/tty*` (Linux) or check Device Manager (Windows)
+- Check user permissions: Add user to `dialout` group on Linux: `sudo usermod -a -G dialout $USER` (logout required)
+- For Bluetooth serial, ensure rfcomm is bound: `sudo rfcomm bind 0 <MAC_ADDRESS> 1`
+- Test connection: `sudo rfcomm connect 0 <MAC_ADDRESS>` or use `screen /dev/ttyUSB0 9600`
+- Check baud rate matches your controller (default: 9600 in `config.py`)
 
 ### Model Loading Errors
 - Ensure `.tflite` file and `labels.txt` are in correct directories
