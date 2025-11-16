@@ -63,7 +63,6 @@ class ControlPanel(QGroupBox):
         arm_group = QGroupBox("🦾 Arm Controls")
         arm_group.setCheckable(True)
         arm_group.setChecked(True)  # Start expanded (checked = expanded)
-        arm_group.setCollapsible(True)
         arm_layout = QGridLayout()
         
         # Arm 1 - Column 0
