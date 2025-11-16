@@ -4,11 +4,19 @@ All global configuration values for the robot controller.
 """
 
 import os
+import platform
 
 # ============================================================
 #                    BLUETOOTH CONFIGURATION
 # ============================================================
-BLUETOOTH_PORT = "/dev/rfcomm0"
+# Default Bluetooth/serial port. On Linux this is commonly `/dev/rfcomm0` or `/dev/ttyUSB0`.
+# On Windows use `COM3`, `COM4`, etc. The code below picks a sensible default based
+# on the current platform, but you should override this in `config.py` or your
+# runtime configuration if needed.
+if platform.system() == "Windows":
+    BLUETOOTH_PORT = "COM3"
+else:
+    BLUETOOTH_PORT = "/dev/rfcomm0"
 BLUETOOTH_BAUD = 9600
 DEFAULT_RFCOMM_CHANNEL = 1
 

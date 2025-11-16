@@ -74,7 +74,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 - Choose connection method:
   - **Virtual Mode**: For testing without hardware
   - **Direct Socket**: Connect via Bluetooth MAC address
-  - **Serial Port**: Connect via any UART interface (e.g., `/dev/ttyUSB0`, `/dev/rfcomm0`, or COM ports on Windows)
+   - **Serial Port**: Connect via any UART interface (e.g., `/dev/ttyUSB0`, `/dev/rfcomm0` on Linux, or `COM3`, `COM4` on Windows)
 
 ### 2. Load Models
 - Go to **Models → Configure Models**
