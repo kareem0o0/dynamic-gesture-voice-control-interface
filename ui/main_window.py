@@ -90,24 +90,6 @@ class RobotControlUI(QMainWindow):
         right_panel.addStretch()
         main_layout.addLayout(right_panel, 1)
     
-    def _create_menu_bar(self):
-        """Create menu bar with model configuration option."""
-        menubar = self.menuBar()
-        
-        # Models menu
-        models_menu = menubar.addMenu("Models")
-        
-        config_action = QAction("Configure Models", self)
-        config_action.triggered.connect(self._open_model_config)
-        models_menu.addAction(config_action)
-        
-        # Help menu
-        help_menu = menubar.addMenu("Help")
-        
-        about_action = QAction("About", self)
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
-    
     def _open_model_config(self):
         """Open model configuration dialog."""
         dialog = ModelConfigDialog(self.backend, self)
@@ -230,6 +212,20 @@ class RobotControlUI(QMainWindow):
         self.log_display.append(
             f'<span style="color:{color};">[{timestamp}] {message}</span>'
         )
+        
+        # Limit log history to prevent memory issues (keep last 1000 lines)
+        from config import MAX_LOG_LINES
+        from PySide6.QtGui import QTextCursor
+        block_count = self.log_display.document().blockCount()
+        if block_count > MAX_LOG_LINES:
+            cursor = QTextCursor(self.log_display.document())
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            # Move to the line we want to keep (remove everything before this)
+            lines_to_remove = block_count - MAX_LOG_LINES
+            for _ in range(lines_to_remove):
+                cursor.movePosition(QTextCursor.MoveOperation.Down, QTextCursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+        
         self.log_display.ensureCursorVisible()
     
     def update_video(self, frame):
@@ -356,6 +352,7 @@ class RobotControlUI(QMainWindow):
             event.accept()
         else:
             event.ignore()
+    
     def _create_menu_bar(self):
         """Create menu bar with model configuration and settings."""
         menubar = self.menuBar()
@@ -370,6 +367,19 @@ class RobotControlUI(QMainWindow):
         profile_action = QAction("Manage Profiles", self)
         profile_action.triggered.connect(self._open_profile_manager)
         models_menu.addAction(profile_action)
+        
+        models_menu.addSeparator()
+        
+        save_config_action = QAction("Save/Load Custom Configuration", self)
+        save_config_action.triggered.connect(self._open_configuration_manager)
+        models_menu.addAction(save_config_action)
+        
+        # Tools menu
+        tools_menu = menubar.addMenu("Tools")
+        
+        monitor_action = QAction("📡 Virtual BT Monitor", self)
+        monitor_action.triggered.connect(self._open_virtual_monitor)
+        tools_menu.addAction(monitor_action)
         
         # Settings menu
         settings_menu = menubar.addMenu("Settings")
@@ -396,42 +406,12 @@ class RobotControlUI(QMainWindow):
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
         new_theme = self.backend.theme_manager.toggle_theme(app)
+        
+        # Refresh control panel buttons
+        if hasattr(self, 'control_panel'):
+            self.control_panel.refresh_theme()
+        
         self.add_log(f"Theme changed to: {new_theme}", "success")
-    def _create_menu_bar(self):
-        """Create menu bar with model configuration and settings."""
-        menubar = self.menuBar()
-        
-        # Models menu
-        models_menu = menubar.addMenu("Models")
-        
-        config_action = QAction("Configure Models", self)
-        config_action.triggered.connect(self._open_model_config)
-        models_menu.addAction(config_action)
-        
-        profile_action = QAction("Manage Profiles", self)
-        profile_action.triggered.connect(self._open_profile_manager)
-        models_menu.addAction(profile_action)
-        
-        # Tools menu
-        tools_menu = menubar.addMenu("Tools")
-        
-        monitor_action = QAction("📡 Virtual BT Monitor", self)
-        monitor_action.triggered.connect(self._open_virtual_monitor)
-        tools_menu.addAction(monitor_action)
-        
-        # Settings menu
-        settings_menu = menubar.addMenu("Settings")
-        
-        theme_action = QAction("Toggle Theme", self)
-        theme_action.triggered.connect(self._toggle_theme)
-        settings_menu.addAction(theme_action)
-        
-        # Help menu
-        help_menu = menubar.addMenu("Help")
-        
-        about_action = QAction("About", self)
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
     
     def _open_virtual_monitor(self):
         """Open virtual Bluetooth monitor window."""
@@ -454,3 +434,9 @@ class RobotControlUI(QMainWindow):
         from .virtual_bt_monitor import VirtualBluetoothMonitor
         monitor = VirtualBluetoothMonitor(self.backend, self)
         monitor.show()
+    
+    def _open_configuration_manager(self):
+        """Open configuration save/load dialog."""
+        from .configuration_dialog import ConfigurationDialog
+        dialog = ConfigurationDialog(self.backend, self)
+        dialog.exec()

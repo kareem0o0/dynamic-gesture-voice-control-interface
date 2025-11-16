@@ -1,0 +1,25 @@
+# SuperClawBot - Robot Controller Dependencies
+# Python 3.8+ required
+
+# GUI Framework
+PySide6>=6.5.0
+
+# Numerical Computing
+numpy>=1.21.0
+
+# Audio Processing
+sounddevice>=0.4.6
+
+# Signal Processing
+scipy>=1.7.0
+
+# Image Processing
+Pillow>=9.0.0
+opencv-python>=4.5.0
+
+# Machine Learning
+tflite-runtime>=2.10.0
+
+# Serial/Bluetooth Communication
+pyserial>=3.5
+

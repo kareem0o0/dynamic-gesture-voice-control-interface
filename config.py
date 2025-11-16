@@ -20,6 +20,7 @@ VOICE_LABELS_PATH = "resources/sound_classifier/labels.txt"
 VOICE_SAMPLE_RATE = 44100
 VOICE_OVERLAP = 0.5
 VOICE_CONFIDENCE_THRESHOLD = 0.7
+CUSTOM_VOICE_THRESHOLD = 0.75  # Confidence threshold for custom voice commands
 
 # ============================================================
 #                    GESTURE CONTROL CONFIGURATION
@@ -29,6 +30,8 @@ GESTURE_LABELS_PATH = "resources/gesture_classifier/labels.txt"
 GESTURE_CONFIDENCE_THRESHOLD = 0.7
 GESTURE_COOLDOWN = 1.0
 GESTURE_IMAGE_SIZE = (224, 224)
+GESTURE_FPS_LIMIT = 30  # Maximum frames per second for gesture recognition
+CUSTOM_GESTURE_THRESHOLD = 0.75  # Confidence threshold for custom gestures
 
 # ============================================================
 #                    TIMING CONFIGURATION
@@ -56,6 +59,7 @@ WINDOW_WIDTH = 1400
 WINDOW_HEIGHT = 800
 VIDEO_WIDTH = 800
 VIDEO_HEIGHT = 600
+MAX_LOG_LINES = 1000  # Maximum log lines to keep in memory
 
 # Control modes
 MODE_KEYBOARD = "KEYBOARD"

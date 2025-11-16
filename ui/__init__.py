@@ -10,7 +10,8 @@ from .custom_voice_dialog import CustomVoiceDialog
 from .profile_manager_dialog import ProfileManagerDialog
 from .theme_manager import ThemeManager
 from .virtual_bt_monitor import VirtualBluetoothMonitor
+from .configuration_dialog import ConfigurationDialog
 
 __all__ = ['SignalEmitter', 'RobotControlUI', 'ModelConfigDialog', 
            'CustomGestureDialog', 'CustomVoiceDialog', 'ProfileManagerDialog', 
-           'ThemeManager', 'VirtualBluetoothMonitor']
+           'ThemeManager', 'VirtualBluetoothMonitor', 'ConfigurationDialog']

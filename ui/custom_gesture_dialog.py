@@ -217,13 +217,27 @@ class CustomGestureDialog(QDialog):
             'embeddings': self.embeddings
         }
     
-    def closeEvent(self, event):
-        """Stop preview and release camera on close."""
+    def _release_camera(self):
+        """Release camera resources."""
         self.preview_timer.stop()
         
         # Release camera to turn off hardware
         if self.camera and self.camera.isOpened():
             self.camera.release()
             print("Training camera released")
-        
+            self.camera = None
+    
+    def accept(self):
+        """Handle dialog acceptance - release camera before closing."""
+        self._release_camera()
+        super().accept()
+    
+    def reject(self):
+        """Handle dialog rejection - release camera before closing."""
+        self._release_camera()
+        super().reject()
+    
+    def closeEvent(self, event):
+        """Stop preview and release camera on close."""
+        self._release_camera()
         event.accept()

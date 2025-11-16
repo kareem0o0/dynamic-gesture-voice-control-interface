@@ -9,7 +9,8 @@ import os
 
 from .base_controller import BaseController
 from models import GestureModel
-from config import GESTURE_CONFIDENCE_THRESHOLD, GESTURE_COOLDOWN
+from config import (GESTURE_CONFIDENCE_THRESHOLD, GESTURE_COOLDOWN, 
+                   GESTURE_FPS_LIMIT, CUSTOM_GESTURE_THRESHOLD)
 from utils.camera import find_camera
 from core.model_manager import ModelManager
 from core.embedding_extractor import EmbeddingExtractor, CustomGestureManager
@@ -45,7 +46,9 @@ class GestureController(BaseController):
         self.last_gesture = None
         self.last_gesture_time = 0
         self.current_cmd = None
-        self.custom_gesture_threshold = 0.75
+        self.custom_gesture_threshold = CUSTOM_GESTURE_THRESHOLD
+        self.frame_time = 1.0 / GESTURE_FPS_LIMIT  # Time per frame for FPS limiting
+        self.last_frame_time = 0
     
     def _load_model(self, model_name):
         """Load a gesture model by name."""
@@ -218,9 +221,29 @@ class GestureController(BaseController):
             # Check active flag at the start of each iteration
             if not self.active:
                 break
+            
+            # Frame rate limiting
+            current_time = time.time()
+            elapsed = current_time - self.last_frame_time
+            if elapsed < self.frame_time:
+                time.sleep(self.frame_time - elapsed)
+            self.last_frame_time = time.time()
+            
+            # Read frame with error handling
+            try:
+                if self.camera is None or not self.camera.isOpened():
+                    if self.active:
+                        self.signals.log_signal.emit("Camera not available", "error")
+                    time.sleep(0.1)
+                    continue
                 
-            ret, frame = self.camera.read()
-            if not ret or frame is None:
+                ret, frame = self.camera.read()
+                if not ret or frame is None:
+                    time.sleep(0.1)
+                    continue
+            except Exception as e:
+                if self.active:
+                    self.signals.log_signal.emit(f"Camera read error: {e}", "error")
                 time.sleep(0.1)
                 continue
             
@@ -252,51 +275,73 @@ class GestureController(BaseController):
                                 confidence = custom_conf
                                 is_custom = True
                     except Exception as e:
-                        print(f"Custom gesture error: {e}")
+                        if self.active:
+                            print(f"Custom gesture error: {e}")
                 
                 # If no custom gesture, use regular model
-                if not is_custom:
-                    input_data = self.model.preprocess_frame(rgb_frame)
-                    class_name, letter, conf = self.model.predict(input_data)
-                    detected_class = class_name
-                    detected_letter = letter
-                    confidence = conf
+                if not is_custom and self.model:
+                    try:
+                        input_data = self.model.preprocess_frame(rgb_frame)
+                        class_name, letter, conf = self.model.predict(input_data)
+                        detected_class = class_name
+                        detected_letter = letter
+                        confidence = conf
+                    except Exception as e:
+                        if self.active:
+                            print(f"Model prediction error: {e}")
+                        continue
                 
                 # Annotate frame
-                if detected_class:
-                    cv2.putText(frame, f"Class: {detected_class}", (10, 30),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                if detected_letter:
-                    cv2.putText(frame, f"Letter: {detected_letter}", (10, 65),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                cv2.putText(frame, f"Conf: {confidence:.2f}", (10, 100),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                
-                if is_custom:
-                    cv2.putText(frame, "CUSTOM GESTURE", (10, 135),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
-                
-                if self.current_cmd:
-                    cv2.putText(frame, f"Active: {self.current_cmd}", (10, 170),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                try:
+                    if detected_class:
+                        cv2.putText(frame, f"Class: {detected_class}", (10, 30),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    if detected_letter:
+                        cv2.putText(frame, f"Letter: {detected_letter}", (10, 65),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                    cv2.putText(frame, f"Conf: {confidence:.2f}", (10, 100),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    
+                    if is_custom:
+                        cv2.putText(frame, "CUSTOM GESTURE", (10, 135),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+                    
+                    if self.current_cmd:
+                        cv2.putText(frame, f"Active: {self.current_cmd}", (10, 170),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                except Exception as e:
+                    if self.active:
+                        print(f"Frame annotation error: {e}")
                 
                 # Send frame to UI (only if still active)
                 if self.active:
-                    self.signals.frame_signal.emit(frame)
+                    try:
+                        self.signals.frame_signal.emit(frame)
+                    except Exception as e:
+                        if self.active:
+                            print(f"Frame signal error: {e}")
                 
                 # Process command
-                threshold = self.custom_gesture_threshold if is_custom else GESTURE_CONFIDENCE_THRESHOLD
-                if confidence > threshold and detected_letter and self.active:
-                    self._handle_gesture(detected_class, detected_letter, confidence)
+                if self.active and detected_letter:
+                    threshold = self.custom_gesture_threshold if is_custom else GESTURE_CONFIDENCE_THRESHOLD
+                    if confidence > threshold:
+                        try:
+                            self._handle_gesture(detected_class, detected_letter, confidence)
+                        except Exception as e:
+                            if self.active:
+                                self.signals.log_signal.emit(f"Gesture handling error: {e}", "error")
             
             except Exception as e:
                 if self.active:  # Only log if we're supposed to be active
-                    self.signals.log_signal.emit(f"Gesture error: {e}", "error")
+                    self.signals.log_signal.emit(f"Gesture recognition error: {e}", "error")
                     print(f"Recognition loop error: {e}")
                 continue
         
         # Ensure we emit None when loop exits
-        self.signals.frame_signal.emit(None)
+        try:
+            self.signals.frame_signal.emit(None)
+        except Exception:
+            pass
         print("Gesture recognition loop exited")
     
     def _handle_gesture(self, gesture, letter, confidence):

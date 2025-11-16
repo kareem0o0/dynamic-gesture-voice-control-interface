@@ -44,11 +44,20 @@ class ModelConfigDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout()
         
-        # Load new model section
+        # Load new model section FIRST (to match gesture tab for UI symmetry)
         load_group = QGroupBox("Load New Voice Model")
         load_layout = QVBoxLayout()
-
-        # Custom voice commands
+        
+        btn_layout = QHBoxLayout()
+        self.voice_load_btn = QPushButton("Load .tflite and labels.txt")
+        self.voice_load_btn.clicked.connect(lambda: self._load_new_model("voice"))
+        btn_layout.addWidget(self.voice_load_btn)
+        load_layout.addLayout(btn_layout)
+        
+        load_group.setLayout(load_layout)
+        layout.addWidget(load_group)
+        
+        # Custom voice commands section SECOND
         custom_voice_group = QGroupBox("Custom Voice Commands (Auto-Learn)")
         custom_voice_layout = QVBoxLayout()
         
@@ -70,16 +79,7 @@ class ModelConfigDialog(QDialog):
         custom_voice_group.setLayout(custom_voice_layout)
         layout.addWidget(custom_voice_group)
         
-        btn_layout = QHBoxLayout()
-        self.voice_load_btn = QPushButton("Load .tflite and labels.txt")
-        self.voice_load_btn.clicked.connect(lambda: self._load_new_model("voice"))
-        btn_layout.addWidget(self.voice_load_btn)
-        load_layout.addLayout(btn_layout)
-        
-        load_group.setLayout(load_layout)
-        layout.addWidget(load_group)
-        
-        # Current model section
+        # Current model section (remains at bottom)
         current_group = QGroupBox("Current Voice Model Mapping")
         current_layout = QVBoxLayout()
         
@@ -87,11 +87,12 @@ class ModelConfigDialog(QDialog):
         current_layout.addWidget(self.voice_model_label)
         
         self.voice_table = QTableWidget()
-        self.voice_table.setColumnCount(3)
-        self.voice_table.setHorizontalHeaderLabels(["Class Name", "Assigned Letter", "Action"])
+        self.voice_table.setColumnCount(4)  # Changed from 3 to 4
+        self.voice_table.setHorizontalHeaderLabels(["Class Name", "Assigned Letter", "Edit", "Delete"])
         self.voice_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.voice_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.voice_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.voice_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         current_layout.addWidget(self.voice_table)
         
         save_btn = QPushButton("Save Mapping")
@@ -103,7 +104,8 @@ class ModelConfigDialog(QDialog):
         
         # Load current mapping
         self._load_voice_mapping()
-        self._refresh_custom_voices() 
+        self._refresh_custom_voices()
+        
         widget.setLayout(layout)
         return widget
     
@@ -155,13 +157,14 @@ class ModelConfigDialog(QDialog):
         current_layout.addWidget(self.gesture_model_label)
         
         self.gesture_table = QTableWidget()
-        self.gesture_table.setColumnCount(3)
-        self.gesture_table.setHorizontalHeaderLabels(["Class Name", "Assigned Letter", "Action"])
+        self.gesture_table.setColumnCount(4)  # Changed from 3 to 4
+        self.gesture_table.setHorizontalHeaderLabels(["Class Name", "Assigned Letter", "Edit", "Delete"])
         self.gesture_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.gesture_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.gesture_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.gesture_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         current_layout.addWidget(self.gesture_table)
-        
+
         save_btn = QPushButton("Save Mapping")
         save_btn.clicked.connect(lambda: self._save_mapping("gesture"))
         current_layout.addWidget(save_btn)
@@ -373,13 +376,18 @@ class ModelConfigDialog(QDialog):
             self.voice_table.setItem(i, 1, letter_item)
             
             # Edit button
-            edit_btn = QPushButton("Edit")
+            edit_btn = QPushButton("✏️ Edit")
             edit_btn.clicked.connect(lambda checked, row=i: self._edit_cell("voice", row))
             self.voice_table.setCellWidget(i, 2, edit_btn)
+            
+            # Delete button
+            delete_btn = QPushButton("🗑️")
+            delete_btn.clicked.connect(lambda checked, row=i, lbl=label: self._delete_class("voice", lbl))
+            self.voice_table.setCellWidget(i, 3, delete_btn)
         
         # Refresh custom voices list
         self._refresh_custom_voices()
-    
+
     def _load_gesture_mapping(self):
         """Load current gesture model mapping into table."""
         if not self.backend.gesture_controller.model:
@@ -412,10 +420,14 @@ class ModelConfigDialog(QDialog):
             self.gesture_table.setItem(i, 1, letter_item)
             
             # Edit button
-            edit_btn = QPushButton("Edit")
+            edit_btn = QPushButton("✏️ Edit")
             edit_btn.clicked.connect(lambda checked, row=i: self._edit_cell("gesture", row))
             self.gesture_table.setCellWidget(i, 2, edit_btn)
-    
+            
+            # Delete button
+            delete_btn = QPushButton("🗑️")
+            delete_btn.clicked.connect(lambda checked, row=i, lbl=label: self._delete_class("gesture", lbl))
+            self.gesture_table.setCellWidget(i, 3, delete_btn)
     def _edit_cell(self, model_type, row):
         """Edit a specific mapping cell."""
         if model_type == "voice":
@@ -537,7 +549,10 @@ class ModelConfigDialog(QDialog):
         # Get existing letters
         existing_letters = set(controller.get_current_mapping().values())
         
-        dialog = CustomVoiceDialog(controller.model, existing_letters, self)
+        # Get existing custom voice names
+        existing_names = controller.get_custom_voices()
+        
+        dialog = CustomVoiceDialog(controller.model, existing_letters, existing_names, self)
         
         if dialog.exec() == QDialog.Accepted:
             data = dialog.get_voice_data()
@@ -573,3 +588,4 @@ class ModelConfigDialog(QDialog):
         voices = self.backend.voice_controller.get_custom_voices()
         for voice in voices:
             self.custom_voice_list.addItem(voice)
+    

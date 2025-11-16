@@ -25,24 +25,46 @@ class VoiceTrainer:
         Record a voice sample.
         
         Returns:
-            Numpy array of audio data
+            Numpy array of audio data, or None on error
         """
         try:
-            print(f"Recording {self.duration} seconds of audio...")
+            print(f"DEBUG: record_sample() - Recording {self.duration} seconds of audio at {self.sample_rate} Hz...")
+            
+            # Check if audio device is available
+            try:
+                devices = sd.query_devices()
+                default_input = sd.default.device[0]
+                if default_input is None:
+                    raise Exception("No default input device found. Please configure your microphone.")
+                print(f"DEBUG: Using input device: {devices[default_input]['name']}")
+            except Exception as e:
+                print(f"DEBUG: Audio device check failed: {e}")
+                raise
+            
+            print("DEBUG: Starting sd.rec()...")
             audio_data = sd.rec(
                 int(self.duration * self.sample_rate),
                 samplerate=self.sample_rate,
                 channels=1,
                 dtype='float32'
             )
+            print("DEBUG: Waiting for recording to finish...")
             sd.wait()  # Wait until recording is finished
-            print("Recording complete")
+            print("DEBUG: Recording complete")
             
-            return audio_data.flatten()
+            if audio_data is None or len(audio_data) == 0:
+                raise Exception("No audio data recorded. Check microphone connection.")
+            
+            flattened = audio_data.flatten()
+            print(f"DEBUG: Audio data shape: {audio_data.shape}, flattened length: {len(flattened)}")
+            return flattened
         
         except Exception as e:
-            print(f"Error recording audio: {e}")
-            return None
+            error_msg = f"Error recording audio: {e}"
+            print(f"DEBUG: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            raise  # Re-raise so thread can catch it
     
     def generate_spectrogram(self, audio_data):
         """

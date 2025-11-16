@@ -8,9 +8,10 @@ import sounddevice as sd
 
 from .base_controller import BaseController
 from models import VoiceModel
-from config import VOICE_SAMPLE_RATE, VOICE_OVERLAP, VOICE_CONFIDENCE_THRESHOLD, COOLDOWN_TIME
+from config import (VOICE_SAMPLE_RATE, VOICE_OVERLAP, VOICE_CONFIDENCE_THRESHOLD, 
+                   COOLDOWN_TIME, CUSTOM_VOICE_THRESHOLD)
 from core.model_manager import ModelManager
-from core.voice_trainer import CustomVoiceManager
+from core.voice_trainer import CustomVoiceManager, VoiceTrainer
 
 
 class VoiceController(BaseController):
@@ -20,11 +21,14 @@ class VoiceController(BaseController):
         super().__init__(command_executor, signal_emitter)
 
         self.custom_voice_manager = CustomVoiceManager()
-        self.custom_voice_threshold = 0.75
+        self.custom_voice_threshold = CUSTOM_VOICE_THRESHOLD
         self.model_manager = ModelManager(signal_emitter)
         self.model = None
         self.buffer = None
         self.current_model_name = None
+        
+        # Initialize VoiceTrainer once (reused in audio callback)
+        self.voice_trainer = VoiceTrainer()
         
         # Try to load default model
         try:
@@ -185,9 +189,7 @@ class VoiceController(BaseController):
             
             # Try to get embedding for custom voice matching
             try:
-                from core.voice_trainer import VoiceTrainer
-                trainer = VoiceTrainer()
-                embedding = trainer.audio_to_embedding(audio, self.model)
+                embedding = self.voice_trainer.audio_to_embedding(audio, self.model)
                 
                 if embedding is not None:
                     custom_name, custom_letter, custom_conf = self.custom_voice_manager.predict(
