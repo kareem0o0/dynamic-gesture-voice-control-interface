@@ -8,7 +8,7 @@ from scipy import signal
 import io
 from PIL import Image
 
-from config import VOICE_TRAINING_DURATION, VOICE_SAMPLE_RATE
+from config import VOICE_TRAINING_DURATION, VOICE_SAMPLE_RATE, DEBUG
 
 
 class VoiceTrainer:
@@ -28,7 +28,8 @@ class VoiceTrainer:
             Numpy array of audio data, or None on error
         """
         try:
-            print(f"DEBUG: record_sample() - Recording {self.duration} seconds of audio at {self.sample_rate} Hz...")
+            if DEBUG:
+                print(f"DEBUG: record_sample() - Recording {self.duration} seconds of audio at {self.sample_rate} Hz...")
             
             # Check if audio device is available
             try:
@@ -36,34 +37,41 @@ class VoiceTrainer:
                 default_input = sd.default.device[0]
                 if default_input is None:
                     raise Exception("No default input device found. Please configure your microphone.")
-                print(f"DEBUG: Using input device: {devices[default_input]['name']}")
+                if DEBUG:
+                    print(f"DEBUG: Using input device: {devices[default_input]['name']}")
             except Exception as e:
-                print(f"DEBUG: Audio device check failed: {e}")
+                if DEBUG:
+                    print(f"DEBUG: Audio device check failed: {e}")
                 raise
             
-            print("DEBUG: Starting sd.rec()...")
+            if DEBUG:
+                print("DEBUG: Starting sd.rec()...")
             audio_data = sd.rec(
                 int(self.duration * self.sample_rate),
                 samplerate=self.sample_rate,
                 channels=1,
                 dtype='float32'
             )
-            print("DEBUG: Waiting for recording to finish...")
+            if DEBUG:
+                print("DEBUG: Waiting for recording to finish...")
             sd.wait()  # Wait until recording is finished
-            print("DEBUG: Recording complete")
+            if DEBUG:
+                print("DEBUG: Recording complete")
             
             if audio_data is None or len(audio_data) == 0:
                 raise Exception("No audio data recorded. Check microphone connection.")
             
             flattened = audio_data.flatten()
-            print(f"DEBUG: Audio data shape: {audio_data.shape}, flattened length: {len(flattened)}")
+            if DEBUG:
+                print(f"DEBUG: Audio data shape: {audio_data.shape}, flattened length: {len(flattened)}")
             return flattened
         
         except Exception as e:
             error_msg = f"Error recording audio: {e}"
-            print(f"DEBUG: {error_msg}")
-            import traceback
-            traceback.print_exc()
+            if DEBUG:
+                print(f"DEBUG: {error_msg}")
+                import traceback
+                traceback.print_exc()
             raise  # Re-raise so thread can catch it
     
     def generate_spectrogram(self, audio_data):

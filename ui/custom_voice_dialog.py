@@ -12,7 +12,7 @@ from PySide6.QtCore import QTimer, Qt, Signal, QThread
 from PySide6.QtGui import QFont
 
 from core.voice_trainer import VoiceTrainer
-from config import VOICE_TRAINING_SAMPLES_RECOMMENDED, VOICE_TRAINING_DURATION
+from config import VOICE_TRAINING_SAMPLES_RECOMMENDED, VOICE_TRAINING_DURATION, DEBUG
 
 
 class RecordingThread(QThread):
@@ -26,24 +26,29 @@ class RecordingThread(QThread):
     
     def run(self):
         """Run recording in background thread."""
-        print("DEBUG: RecordingThread.run() started")
+        if DEBUG:
+            print("DEBUG: RecordingThread.run() started")
         try:
             audio_data = self.trainer.record_sample()
-            print(f"DEBUG: record_sample() returned: {type(audio_data)}, length: {len(audio_data) if audio_data is not None else 'None'}")
+            if DEBUG:
+                print(f"DEBUG: record_sample() returned: {type(audio_data)}, length: {len(audio_data) if audio_data is not None else 'None'}")
             
             if audio_data is None:
                 error_msg = "Recording failed: No audio data received. Check microphone connection and permissions."
-                print(f"DEBUG: {error_msg}")
+                if DEBUG:
+                    print(f"DEBUG: {error_msg}")
                 self.error.emit(error_msg)
                 self.finished.emit(None)
             else:
-                print("DEBUG: Emitting finished signal with audio data")
+                if DEBUG:
+                    print("DEBUG: Emitting finished signal with audio data")
                 self.finished.emit(audio_data)
         except Exception as e:
             error_msg = f"Recording error: {str(e)}"
-            print(f"DEBUG: Exception in run(): {error_msg}")
-            import traceback
-            traceback.print_exc()
+            if DEBUG:
+                print(f"DEBUG: Exception in run(): {error_msg}")
+                import traceback
+                traceback.print_exc()
             self.error.emit(error_msg)
             self.finished.emit(None)  # Emit None to indicate failure
 
@@ -217,7 +222,8 @@ class CustomVoiceDialog(QDialog):
     
     def _start_recording(self):
         """Start recording a sample."""
-        print("DEBUG: _start_recording called")
+        if DEBUG:
+            print("DEBUG: _start_recording called")
         
         # Check if we've reached the limit
         target_samples = self.sample_count_spin.value()
@@ -234,7 +240,8 @@ class CustomVoiceDialog(QDialog):
         name = self.name_input.text().strip()
         letter = self.letter_input.text().strip()
         
-        print(f"DEBUG: name='{name}', letter='{letter}'")
+        if DEBUG:
+            print(f"DEBUG: name='{name}', letter='{letter}'")
         
         if not name:
             QMessageBox.warning(self, "Invalid Input", "Please enter a command name.")
@@ -266,7 +273,8 @@ class CustomVoiceDialog(QDialog):
             QMessageBox.warning(self, "Recording in Progress", "Please wait for the current recording to finish.")
             return
         
-        print("DEBUG: Starting recording thread...")
+        if DEBUG:
+            print("DEBUG: Starting recording thread...")
         
         # Disable button during recording
         self.record_btn.setEnabled(False)
@@ -277,9 +285,11 @@ class CustomVoiceDialog(QDialog):
         self.recording_thread = RecordingThread(self.trainer)
         self.recording_thread.finished.connect(self._on_recording_finished)
         self.recording_thread.error.connect(self._on_recording_error)
-        print("DEBUG: Thread created, starting...")
+        if DEBUG:
+            print("DEBUG: Thread created, starting...")
         self.recording_thread.start()
-        print("DEBUG: Thread started")
+        if DEBUG:
+            print("DEBUG: Thread started")
     
     def _on_recording_error(self, error_msg):
         """Handle recording error."""
@@ -294,7 +304,8 @@ class CustomVoiceDialog(QDialog):
     
     def _on_recording_finished(self, audio_data):
         """Handle completed recording."""
-        print(f"DEBUG: _on_recording_finished called with audio_data: {audio_data is not None}")
+        if DEBUG:
+            print(f"DEBUG: _on_recording_finished called with audio_data: {audio_data is not None}")
         self.record_btn.setEnabled(True)
         
         if audio_data is None:
