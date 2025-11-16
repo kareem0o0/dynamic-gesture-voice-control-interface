@@ -44,3 +44,10 @@ saved_configurations/*.json
 # Model files (optional - uncomment if you don't want to track models)
 # resources/**/*.tflite
 # resources/**/*.txt
+
+# Allow including a packaged App/ folder when present (packaged build)
+# Keep virtualenvs and original SuperClawBot/ venv ignored, but re-include
+# the packaged App/SuperClawBot directory and its contents for commit.
+!App/
+!App/SuperClawBot/
+!App/SuperClawBot/**
