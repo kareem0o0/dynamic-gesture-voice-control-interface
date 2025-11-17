@@ -84,10 +84,10 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 #### Example Gesture Classes
 **Start Gesture**  
-![Start Gesture](https://i.ibb.co/sd6hM43/strat.png)
+![Start Gesture](https://i.ibb.co/gLPGB8g2/Screenshot-from-2025-11-17-22-03-44.png)
 
 **Stop Gesture**  
-![Stop Gesture](https://i.ibb.co/jZDF7nY/stop.png)
+![Stop Gesture](https://i.ibb.co/NnKzwcqj/Screenshot-from-2025-11-17-22-03-17.png)
 
 ### 3. Train Custom Commands
 - **Custom Voice Commands**: 
