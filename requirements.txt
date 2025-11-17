@@ -23,3 +23,14 @@ tflite-runtime>=2.10.0
 # Serial/Bluetooth Communication
 pyserial>=3.5
 
+# Bluetooth Support (Optional - for device discovery)
+# Note: PyBluez installation varies by platform:
+# - Linux: pip install pybluez
+# - Windows: pip install pybluez-win10 (requires Microsoft C++ Build Tools)
+# - macOS: pip install pybluez (requires Xcode Command Line Tools)
+# If PyBluez fails to install, the app will still work with:
+# - Virtual Bluetooth mode (for testing)
+# - Direct serial port connections
+# - Pre-paired devices via system Bluetooth settings
+pybluez>=0.23; platform_system == "Linux"
+

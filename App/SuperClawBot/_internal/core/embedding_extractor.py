@@ -4,7 +4,7 @@ Extracts feature vectors from TFLite models without classification.
 """
 
 import numpy as np
-import tflite_runtime.interpreter as tflite
+from utils.tflite_compat import get_tflite_interpreter
 from PIL import Image, ImageOps
 
 from config import GESTURE_IMAGE_SIZE
@@ -22,7 +22,7 @@ class EmbeddingExtractor:
     def _load_model(self):
         """Load TFLite model and find embedding layer."""
         try:
-            self.interpreter = tflite.Interpreter(self.model_path)
+            self.interpreter = get_tflite_interpreter(self.model_path)
             self.interpreter.allocate_tensors()  # CRITICAL: Allocate first
             
             # Get output details - use the main output layer

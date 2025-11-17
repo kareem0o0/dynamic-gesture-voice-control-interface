@@ -5,7 +5,7 @@ Gesture recognition model handler.
 import os
 import numpy as np
 from PIL import Image, ImageOps
-import tflite_runtime.interpreter as tflite
+from utils.tflite_compat import get_tflite_interpreter
 
 from config import GESTURE_IMAGE_SIZE
 from utils.resource_loader import resource_path
@@ -50,7 +50,7 @@ class GestureModel:
             raise FileNotFoundError(f"Gesture labels not found: {labels_path}")
         
         try:
-            self.interpreter = tflite.Interpreter(model_path)
+            self.interpreter = get_tflite_interpreter(model_path)
             self.interpreter.allocate_tensors()
             
             # Load labels

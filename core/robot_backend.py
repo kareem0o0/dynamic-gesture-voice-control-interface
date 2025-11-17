@@ -148,26 +148,40 @@ class RobotControllerBackend:
         """Cleanup all resources."""
         self.running = False
         self.stop_all_motors()
-        
-        # Save current profiles before cleanup
-        if self.voice_controller.model:
-            self._save_current_profile('voice')
-        if self.gesture_controller.model:
-            self._save_current_profile('gesture')
-        
-        # Stop controllers
-        if self.current_mode == MODE_VOICE:
-            self.voice_controller.stop()
-        elif self.current_mode == MODE_GESTURE:
-            self.gesture_controller.stop()
-        
-        # Release camera
-        if self.gesture_controller.camera:
-            self.gesture_controller.camera.release()
-        
-        # Disconnect Bluetooth
-        self.bluetooth.disconnect()
-        
+
+        try:
+            # Save current profiles before cleanup
+            if self.voice_controller.model:
+                self._save_current_profile('voice')
+            if self.gesture_controller.model:
+                self._save_current_profile('gesture')
+        except Exception as e:
+            self.signals.log_signal.emit(f"Error saving profiles: {e}", "warning")
+
+        try:
+            # Stop controllers
+            if self.current_mode == MODE_VOICE:
+                self.voice_controller.stop()
+            elif self.current_mode == MODE_GESTURE:
+                self.gesture_controller.stop()
+        except Exception as e:
+            self.signals.log_signal.emit(f"Error stopping controllers: {e}", "warning")
+
+        try:
+            # Release camera resources
+            if hasattr(self.gesture_controller, 'cleanup'):
+                self.gesture_controller.cleanup()
+            elif self.gesture_controller.camera:
+                self.gesture_controller.camera.release()
+        except Exception as e:
+            self.signals.log_signal.emit(f"Error releasing camera: {e}", "warning")
+
+        try:
+            # Disconnect Bluetooth
+            self.bluetooth.disconnect()
+        except Exception as e:
+            self.signals.log_signal.emit(f"Error disconnecting Bluetooth: {e}", "warning")
+
         self.signals.log_signal.emit("Cleanup complete", "info")
     
     def _save_current_profile(self, model_type):

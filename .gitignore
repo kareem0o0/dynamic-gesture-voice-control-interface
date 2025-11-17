@@ -48,6 +48,7 @@ env/
 ENV/
 SuperClawBot/
 .venv
+windows_tool/
 
 # IDE
 .vscode/

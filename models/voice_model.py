@@ -4,8 +4,7 @@ Voice recognition model handler.
 
 import os
 import numpy as np
-import tflite_runtime.interpreter as tflite
-
+from utils.tflite_compat import get_tflite_interpreter
 from utils.resource_loader import resource_path
 
 
@@ -49,7 +48,7 @@ class VoiceModel:
             raise FileNotFoundError(f"Voice labels not found: {labels_path}")
         
         try:
-            self.interpreter = tflite.Interpreter(model_path)
+            self.interpreter = get_tflite_interpreter(model_path)
             self.interpreter.allocate_tensors()
             
             # Get buffer size from model input shape

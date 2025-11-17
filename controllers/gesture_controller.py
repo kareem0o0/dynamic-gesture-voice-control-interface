@@ -198,22 +198,45 @@ class GestureController(BaseController):
         self.active = False
         
         if self.current_cmd:
-            self.executor.send_command('!')  # Stop all
+            try:
+                self.executor.send_command('!')  # Stop all
+            except Exception as e:
+                print(f"Error sending stop command: {e}")
             self.current_cmd = None
         
         # Wait for thread to finish
         if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2)
+            self.thread.join(timeout=3)
+            if self.thread.is_alive():
+                self.signals.log_signal.emit("Warning: Gesture thread did not stop cleanly", "warning")
         
         # Release the camera to turn off the hardware
-        if self.camera and self.camera.isOpened():
-            self.camera.release()
-            print("Camera released")
+        self._release_camera()
         
         # Clear the video display
-        self.signals.frame_signal.emit(None)
+        try:
+            self.signals.frame_signal.emit(None)
+        except Exception as e:
+            print(f"Error clearing video display: {e}")
         
         self.signals.log_signal.emit("Gesture recognition stopped", "info")
+    
+    def _release_camera(self):
+        """Safely release camera resources."""
+        if self.camera:
+            try:
+                if self.camera.isOpened():
+                    self.camera.release()
+                    print("Camera released")
+                self.camera = None
+            except Exception as e:
+                print(f"Error releasing camera: {e}")
+                self.camera = None
+    
+    def cleanup(self):
+        """Cleanup all resources."""
+        self.stop()
+        self._release_camera()
 
     def _recognition_loop(self):
         """Main gesture recognition loop with custom gesture support."""
