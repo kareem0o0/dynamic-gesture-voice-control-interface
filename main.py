@@ -50,25 +50,33 @@ def setup_dark_theme(app):
 
 def main():
     """Main application entry point."""
-    # Create Qt application
-    app = QApplication(sys.argv)
-    
-    # Setup dark theme
-    setup_dark_theme(app)
-    
-    # Create signal emitter (for thread-safe communication)
-    signals = SignalEmitter()
-    
-    # Create backend controller
-    backend = RobotControllerBackend(signals)
-    
-    # Create and show main window
-    window = RobotControlUI(backend)
-    window.show()
-    
-    # Run application
-    sys.exit(app.exec())
+    try:
+        # Create Qt application
+        app = QApplication(sys.argv)
+
+        # Setup dark theme
+        setup_dark_theme(app)
+
+        # Create signal emitter (for thread-safe communication)
+        signals = SignalEmitter()
+
+        # Create backend controller and pass signals
+        backend = RobotControllerBackend(signals)
+
+        # Create and show main window
+        window = RobotControlUI(backend)
+        window.show()
+
+        # Run application and return exit code
+        return app.exec()
+
+    except Exception as e:
+        # Provide a clear startup error in console for debugging on new platforms
+        import traceback
+        traceback.print_exc()
+        print(f"Application failed to start: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
