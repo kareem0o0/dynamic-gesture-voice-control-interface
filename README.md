@@ -76,7 +76,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
   - **Direct Socket**: Connect via Bluetooth MAC address
   - **Serial Port**: Connect via any UART interface (e.g., `/dev/ttyUSB0`, `/dev/rfcomm0`, or COM ports on Windows)
 
-### 2. Load Models
+### 2. Load Models 
 - Go to **Models → Configure Models**
 - **Voice Tab**: Load your `.tflite` voice model and `labels.txt`
 - **Gesture Tab**: Load your `.tflite` gesture model and `labels.txt`
@@ -107,7 +107,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 ## Configuration
 
-### Model Files
+### Model Files (those are default mockup models ,you can make your own .tflite models and add them or make your costume on top of the existing ones through the app )
 Place your TensorFlow Lite models in:
 - Voice models: `resources/sound_classifier/`
 - Gesture models: `resources/gesture_classifier/`
@@ -232,11 +232,6 @@ This project is open source. See LICENSE file for details.
 
 **kareem0o0**
 
-## Acknowledgments
-
-- Built with PySide6 for the GUI
-- TensorFlow Lite for machine learning inference
-- OpenCV for camera and image processing
 
 ## Version
 
