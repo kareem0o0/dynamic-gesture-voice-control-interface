@@ -1,4 +1,4 @@
-# SuperClawBot - Unified Robot Controller
+# dynamic-gesture-voice-control-interface
 
 A comprehensive robot control system with **keyboard**, **voice**, and **gesture** recognition capabilities. Built with PySide6 and TensorFlow Lite for real-time control and machine learning-based input recognition.
 
