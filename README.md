@@ -80,6 +80,14 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 - Go to **Models → Configure Models**
 - **Voice Tab**: Load your `.tflite` voice model and `labels.txt`
 - **Gesture Tab**: Load your `.tflite` gesture model and `labels.txt`
+- 
+### Start Class
+![Start Class Diagram](https://ibb.co/sd6hM43f)  
+**Start** class – responsible for initiating the process
+
+### Stop Class
+![Stop Class Diagram](https://ibb.co/jZDF7nYM)  
+**Stop** class – responsible for terminating the process
 - Assign letters to each class for robot commands
 
 ### 3. Train Custom Commands
