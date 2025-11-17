@@ -1,0 +1,50 @@
+Windows setup & build guide for SuperClawBot
+
+Prerequisites
+- Windows 10/11 (64-bit recommended)
+- Python 3.8+ (64-bit) installed and on PATH
+- Git (optional, to clone the repo)
+- Microsoft Visual C++ Redistributable (install if the app fails to start)
+- Optional: a clean Windows VM for testing
+
+Quick setup (run in PowerShell from repository root)
+1. Create and activate a virtual environment
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+
+2. Upgrade packaging tools and install runtime requirements
+   pip install -U pip setuptools wheel
+   pip install -r requirements.txt
+
+3. Install PyInstaller for building
+   pip install pyinstaller
+
+4. (Optional) If `tflite-runtime` fails to install on your platform, install
+   `tensorflow` or use an alternative runtime compatible with Windows.
+
+Build the app (one-folder for debugging)
+ - Run the included helper script:
+   .\scripts\build_windows.ps1
+
+ - Or run PyInstaller manually (example):
+   python -m PyInstaller --noconfirm --onedir --name SuperClawBot \
+     --add-data "resources;resources" --add-data "models;models" --collect-all PySide6 main.py
+
+Notes & troubleshooting
+- The produced folder lives in `dist\SuperClawBot`. Run the EXE inside to test.
+- If Qt plugins are missing, add `--collect-all PySide6` or explicitly add binaries.
+- Large model files will increase bundle size; consider shipping them separately
+  and downloading on first run to reduce build size.
+- If Bluetooth/serial access fails, ensure Windows drivers are installed and
+  update `config.py` to point to the correct `COM` port (e.g. `COM3`).
+- End users typically don't need Python; the PyInstaller bundle includes it.
+  They may still need the VC++ redistributable and drivers.
+
+Recommended final steps
+- Test the built app on a clean Windows VM and note any missing DLLs/plugins.
+- Package `dist\SuperClawBot` into a .zip or installer and upload to Releases.
+- Do NOT commit your `.venv` or `dist` into git; add them to `.gitignore`.
+
+If you want, I can update `scripts\build_windows.ps1` to include exact
+`--add-data` entries for every resource/model file in the repo (I can list
+their sizes first to help estimate final bundle size).
