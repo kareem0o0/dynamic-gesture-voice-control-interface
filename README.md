@@ -1,6 +1,12 @@
-# SuperClawBot - Unified Robot Controller
+# dynamic-gesture-voice-control-interface
 
 A comprehensive robot control system with **keyboard**, **voice**, and **gesture** recognition capabilities. Built with PySide6 and TensorFlow Lite for real-time control and machine learning-based input recognition.
+### Note
+This is the Windows-compatible version of the application.
+
+A ready-to-use Windows App is included, allowing you to try the application directly without installing any dependencies.
+To download: https://drive.google.com/file/d/1Vzfh16d628jGsgvc3_rAc5kMnJmTa_g_/view?usp=sharing
+
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -20,6 +26,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 - Profile management for different model configurations
 
 ### 🎨 User Interface
+![Full_UI](https://i.imgur.com/z8m1c5L.png)
 - Modern dark/light theme support
 - Real-time video feed for gesture recognition
 - Activity logging with color-coded messages
@@ -37,7 +44,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 ### Prerequisites
 - Python 3.8 or higher
-- Linux (tested on Ubuntu/Debian) or Windows
+- Windows (tested on Windows 10/11)
 - Camera (for gesture control)
 - Microphone (for voice control)
 - UART-compatible controller (via Bluetooth, USB serial, or other serial interface)
@@ -52,8 +59,8 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 2. **Create a virtual environment (recommended):**
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m venv venv
+   venv\Scripts\activate
    ```
 
 3. **Install dependencies:**
@@ -66,6 +73,27 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
    python main.py
    ```
 
+### Building the Windows Executable
+
+To create a standalone Windows executable using PyInstaller:
+
+1. **Install PyInstaller:**
+   ```bash
+   pip install pyinstaller
+   ```
+
+2. **Build the executable:**
+   ```bash
+   pyinstaller MyApp.spec
+   ```
+
+3. **Run the executable:**
+   The executable will be created in `dist/MyApp/MyApp.exe`
+   ```bash
+   cd dist\MyApp
+   .\MyApp.exe
+   ```
+
 ## Quick Start
 
 ### 1. Connect to Robot
@@ -73,14 +101,22 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 - Go to **Connection Setup** panel
 - Choose connection method:
   - **Virtual Mode**: For testing without hardware
-  - **Direct Socket**: Connect via Bluetooth MAC address
-   - **Serial Port**: Connect via any UART interface (e.g., `/dev/ttyUSB0`, `/dev/rfcomm0` on Linux, or `COM3`, `COM4` on Windows)
+- **Direct Socket**: Connect via Bluetooth MAC address
+- **Serial Port**: Connect via any UART interface (e.g., `COM3`, `COM4` on Windows)
 
-### 2. Load Models
+### 2. Load Models 
 - Go to **Models → Configure Models**
 - **Voice Tab**: Load your `.tflite` voice model and `labels.txt`
 - **Gesture Tab**: Load your `.tflite` gesture model and `labels.txt`
 - Assign letters to each class for robot commands
+
+#### Example Gesture Classes
+**Start Gesture**  
+![Start Gesture](https://i.imgur.com/2hDoOlG.png)
+
+**Stop Gesture**  
+![Stop Gesture](https://i.imgur.com/NKonsBn.png)
+
 
 ### 3. Train Custom Commands
 - **Custom Voice Commands**: 
@@ -100,7 +136,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 ## Configuration
 
-### Model Files
+### Model Files (those are default mockup models ,you can make your own .tflite models and add them or make your costume on top of the existing ones through the app )
 Place your TensorFlow Lite models in:
 - Voice models: `resources/sound_classifier/`
 - Gesture models: `resources/gesture_classifier/`
@@ -190,15 +226,14 @@ SuperClawBot/
 The application supports universal UART communication through multiple interfaces:
 
 **Connection Methods:**
-- **Bluetooth (Wireless)**: Use Direct Socket mode with MAC address or Serial Port mode with `/dev/rfcomm0` (Linux) after binding
-- **USB Serial (Wired)**: Use Serial Port mode with device path (e.g., `/dev/ttyUSB0`, `/dev/ttyACM0` on Linux or `COM3`, `COM4` on Windows)
+- **Bluetooth (Wireless)**: Use Direct Socket mode with MAC address or Serial Port mode with `COM3`, `COM4` after pairing
+- **USB Serial (Wired)**: Use Serial Port mode with device path (e.g., `COM3`, `COM4` on Windows)
 - **Virtual Mode**: For testing application features without physical hardware
 
 **Troubleshooting:**
-- Verify device path exists: `ls /dev/tty*` (Linux) or check Device Manager (Windows)
-- Check user permissions: Add user to `dialout` group on Linux: `sudo usermod -a -G dialout $USER` (logout required)
-- For Bluetooth serial, ensure rfcomm is bound: `sudo rfcomm bind 0 <MAC_ADDRESS> 1`
-- Test connection: `sudo rfcomm connect 0 <MAC_ADDRESS>` or use `screen /dev/ttyUSB0 9600`
+- Verify device path exists: Check Device Manager for COM ports
+- For Bluetooth serial, ensure device is paired in Windows Bluetooth settings
+- Test connection: Use PuTTY or similar terminal software to connect to COM port at 9600 baud
 - Check baud rate matches your controller (default: 9600 in `config.py`)
 
 ### Model Loading Errors
@@ -225,11 +260,6 @@ This project is open source. See LICENSE file for details.
 
 **kareem0o0**
 
-## Acknowledgments
-
-- Built with PySide6 for the GUI
-- TensorFlow Lite for machine learning inference
-- OpenCV for camera and image processing
 
 ## Version
 
@@ -238,26 +268,3 @@ This project is open source. See LICENSE file for details.
 ---
 
 For issues, questions, or contributions, please open an issue on GitHub.
-
-
-**Playground Branch — Build Artifacts**
-
-- **What changed:** The `playground` branch contains a small build workflow used for packaging the app with PyInstaller. Added files include:
-   - `scripts/build_app.sh` — Bash helper to run PyInstaller and bundle data folders.
-   - `README_BUILD.md` — Build instructions and troubleshooting notes for PyInstaller builds.
-   - `app/` — A one-folder PyInstaller build of the application (bundled executable and data). Note: this folder was added for convenience and testing.
-
-- **Important notes:**
-   - This build is OS- and architecture-specific. The binary in `app/` will only run on the same OS/arch it was built on.
-   - The repository also contained a Python virtual environment; it's recommended to keep virtualenvs out of the repo. Consider updating `.gitignore` to exclude `SuperClawBot/` (the venv) and other environment artifacts.
-   - For distribution to other users, prefer creating releases (GitHub Releases, AppImage for Linux, or OS installers) rather than committing large binaries to the repository history.
-
-- **Quick run:** To run the included app (on a matching Linux system):
-
-```bash
-cd app
-./SuperClawBot
-```
-
-If you want, I can update `.gitignore` to remove the virtualenv and large build files from the repository and clean up the git history — tell me if you want me to proceed with that.
-
