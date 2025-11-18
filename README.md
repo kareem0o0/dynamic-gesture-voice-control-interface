@@ -5,7 +5,10 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 The `main` branch is intended for Linux users.  
 Windows users should switch to the `windows_tool` branch, which includes the full Windows-compatible setup.
 
-A ready-to-use Linux App is also included, allowing you to try the application directly without installing any dependencies.
+A ready-to-use Linux and wndows App is also included, allowing you to try the application directly without installing any dependencies.
+to downlaod :
+linux app: https://drive.google.com/file/d/10THcIMtlubHUII9Ga0ysrHpHgWTybB_0/view?usp=sharing 
+windows app: https://drive.google.com/file/d/1Vzfh16d628jGsgvc3_rAc5kMnJmTa_g_/view?usp=sharing
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
