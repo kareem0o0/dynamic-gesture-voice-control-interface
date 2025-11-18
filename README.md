@@ -1,7 +1,11 @@
 # dynamic-gesture-voice-control-interface
 
 A comprehensive robot control system with **keyboard**, **voice**, and **gesture** recognition capabilities. Built with PySide6 and TensorFlow Lite for real-time control and machine learning-based input recognition.
+### Note
+The `main` branch is intended for Linux users.  
+Windows users should switch to the `windows_tool` branch, which includes the full Windows-compatible setup.
 
+A ready-to-use Linux App is also included, allowing you to try the application directly without installing any dependencies.
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -20,6 +24,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 - Profile management for different model configurations
 
 ### 🎨 User Interface
+![Full_UI](https://i.imgur.com/z8m1c5L.png)
 - Modern dark/light theme support
 - Real-time video feed for gesture recognition
 - Activity logging with color-coded messages
@@ -37,7 +42,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 ### Prerequisites
 - Python 3.8 or higher
-- Linux (tested on Ubuntu/Debian) or Windows
+- Linux (tested on Ubuntu/Debian) for the main branch or Windows (for windows branch)
 - Camera (for gesture control)
 - Microphone (for voice control)
 - UART-compatible controller (via Bluetooth, USB serial, or other serial interface)
@@ -88,6 +93,7 @@ A comprehensive robot control system with **keyboard**, **voice**, and **gesture
 
 **Stop Gesture**  
 ![Stop Gesture](https://i.imgur.com/NKonsBn.png)
+
 
 ### 3. Train Custom Commands
 - **Custom Voice Commands**: 
